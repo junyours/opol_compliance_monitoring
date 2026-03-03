@@ -70,6 +70,16 @@ export default function ChecklistResponseReports({ auth }) {
     });
     const [expandedQuestion, setExpandedQuestion] = useState(null);
     const [viewMode, setViewMode] = useState('overview'); // 'overview', 'questions', 'categories', 'trends'
+    const [selectedQuestion, setSelectedQuestion] = useState(null);
+    const [showQuestionModal, setShowQuestionModal] = useState(false);
+    const [questionResponses, setQuestionResponses] = useState({
+        positive: [],
+        negative: [],
+        na: [],
+        conditional_fields: []
+    });
+    const [loadingQuestionDetails, setLoadingQuestionDetails] = useState(false);
+    const [establishmentSearch, setEstablishmentSearch] = useState('');
 
     const fetchResponseData = async () => {
         setLoading(true);
@@ -100,6 +110,40 @@ export default function ChecklistResponseReports({ auth }) {
         setExpandedQuestion(expandedQuestion === questionId ? null : questionId);
     };
 
+    const handleQuestionClick = async (question) => {
+        setSelectedQuestion(question);
+        setShowQuestionModal(true);
+        setLoadingQuestionDetails(true);
+        
+        try {
+            const response = await fetch(`/admin/reports/checklist-responses/question-details/${question.question_id}?${new URLSearchParams(filters).toString()}`);
+            const data = await response.json();
+            console.log('Question details data:', data);
+            console.log('Conditional fields:', data.conditional_fields);
+            setQuestionResponses(data);
+        } catch (error) {
+            console.error('Error fetching question details:', error);
+        } finally {
+            setLoadingQuestionDetails(false);
+        }
+    };
+
+    const handleCloseQuestionModal = () => {
+        setShowQuestionModal(false);
+        setSelectedQuestion(null);
+        setQuestionResponses({ positive: [], negative: [], na: [], conditional_fields: [] });
+        setEstablishmentSearch('');
+    };
+
+    const filterResponses = (responses) => {
+        if (!establishmentSearch.trim()) return responses;
+        
+        const searchTerm = establishmentSearch.toLowerCase();
+        return responses.filter(response => 
+            response.establishment_name.toLowerCase().includes(searchTerm)
+        );
+    };
+
     const handleExportReport = () => {
         const params = new URLSearchParams(filters);
         window.open(`/admin/reports/checklist-responses/export?${params.toString()}`, '_blank');
@@ -119,8 +163,11 @@ export default function ChecklistResponseReports({ auth }) {
         
         const responseStr = response.toLowerCase().trim();
         
-        // Check for N/A responses
-        if (responseStr === 'n/a' || responseStr.includes('not applicable')) {
+        // Check for N/A responses (including variations)
+        if (responseStr === 'n/a' || 
+            responseStr === 'na' || 
+            responseStr.includes('not applicable') || 
+            responseStr === 'n/a') {
             return 'bg-gray-100 text-gray-800 border-gray-200';
         }
         
@@ -393,6 +440,24 @@ export default function ChecklistResponseReports({ auth }) {
                             
                             <div className="p-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="flex items-center text-sm font-bold text-gray-700">
+                                            <BuildingOfficeIcon className="w-4 h-4 mr-2 text-indigo-500" />
+                                            Establishment
+                                        </label>
+                                        <select
+                                            value={filters.establishment_id}
+                                            onChange={(e) => handleFilterChange('establishment_id', e.target.value)}
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50/50 transition-all duration-200 hover:bg-gray-50"
+                                        >
+                                            <option value="">All Establishments</option>
+                                            {responseData.summary?.unique_establishments > 0 && Array.from({length: responseData.summary.unique_establishments}, (_, i) => (
+                                                <option key={i + 1} value={i + 1}>
+                                                    {responseData.summary?.establishment_names?.[i] || `Establishment ${i + 1}`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div className="space-y-2">
                                         <label className="flex items-center text-sm font-bold text-gray-700">
                                             <CalendarIcon className="w-4 h-4 mr-2 text-indigo-500" />
@@ -670,80 +735,98 @@ export default function ChecklistResponseReports({ auth }) {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        {responseData.analytics.question_analysis.slice(0, 20).map((question, index) => (
-                                            <div key={question.question_id} className="group relative overflow-hidden">
-                                                <div className="absolute inset-0 bg-gradient-to-r from-gray-50 to-white opacity-50"></div>
-                                                <div className="relative bg-white rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-102">
-                                                    <div className="flex items-start justify-between">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center space-x-3 mb-3">
-                                                                <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold text-sm">
-                                                                    {index + 1}
-                                                                </div>
-                                                                <span className={`px-3 py-1 text-sm font-bold rounded-full ${
-                                                                    question.compliance_rate >= 90 ? 'bg-green-100 text-green-800 border border-green-200' :
-                                                                    question.compliance_rate >= 70 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                                                                    'bg-red-100 text-red-800 border border-red-200'
-                                                                }`}>
-                                                                    {question.compliance_rate}% compliant
-                                                                </span>
-                                                                <span className="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                                                                    {question.category}
-                                                                </span>
-                                                            </div>
-                                                            <h4 className="font-bold text-gray-900 mb-3 text-lg">{question.question_text}</h4>
-                                                            <div className="grid grid-cols-4 gap-4 mb-4">
-                                                                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                                                                    <p className="text-2xl font-bold text-gray-900">{question.total_responses}</p>
-                                                                    <p className="text-xs text-gray-600">Total</p>
-                                                                </div>
-                                                                <div className="text-center p-3 bg-green-50 rounded-lg">
-                                                                    <p className="text-2xl font-bold text-green-600">{question.positive_responses}</p>
-                                                                    <p className="text-xs text-green-600">Positive</p>
-                                                                </div>
-                                                                <div className="text-center p-3 bg-red-50 rounded-lg">
-                                                                    <p className="text-2xl font-bold text-red-600">{question.negative_responses}</p>
-                                                                    <p className="text-xs text-red-600">Negative</p>
-                                                                </div>
-                                                                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                                                                    <p className="text-2xl font-bold text-gray-600">{question.na_responses}</p>
-                                                                    <p className="text-xs text-gray-600">N/A</p>
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            {question.negative_responses > 0 && question.establishments_with_issues.length > 0 && (
-                                                                <div className="mt-4">
-                                                                    <button
-                                                                        onClick={() => handleViewDetails(question.question_id)}
-                                                                        className="flex items-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors duration-200 group"
-                                                                    >
-                                                                        <EyeIcon className="w-4 h-4 group-hover:animate-pulse" />
-                                                                        <span className="font-medium">View {question.establishments_with_issues.length} establishments with issues</span>
-                                                                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${expandedQuestion === question.question_id ? 'rotate-180' : ''}`} />
-                                                                    </button>
-                                                                    {expandedQuestion === question.question_id && (
-                                                                        <div className="mt-4 p-4 bg-red-50 rounded-xl border border-red-200 animate-in slide-in-from-top duration-300">
-                                                                            <p className="text-sm font-bold text-red-800 mb-3 flex items-center">
-                                                                                <ExclamationTriangleIcon className="w-4 h-4 mr-2" />
-                                                                                Establishments requiring attention:
-                                                                            </p>
-                                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                                                                {question.establishments_with_issues.map((establishment, idx) => (
-                                                                                    <div key={idx} className="px-3 py-2 text-sm bg-white rounded-lg border border-red-200 font-medium text-red-700">
-                                                                                        {establishment}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                    {/* Questions Grouped by Category */}
+                                    <div className="space-y-8">
+                                        {Object.entries(
+                                            responseData.analytics.question_analysis.reduce((categories, question) => {
+                                                const categoryName = question.category || 'Uncategorized';
+                                                if (!categories[categoryName]) {
+                                                    categories[categoryName] = [];
+                                                }
+                                                categories[categoryName].push(question);
+                                                return categories;
+                                            }, {})
+                                        ).map(([categoryName, questions]) => {
+                                            // Sort questions by compliance rate (lowest first) to prioritize problematic questions
+                                            const sortedQuestions = [...questions].sort((a, b) => a.compliance_rate - b.compliance_rate);
+                                            
+                                            return (
+                                            <div key={categoryName} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-200">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <TagIcon className="w-5 h-5 text-indigo-600" />
+                                                            <h3 className="text-lg font-bold text-gray-900">{categoryName}</h3>
+                                                            <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
+                                                                {questions.length} questions
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                                                            <span>Category Compliance:</span>
+                                                            <span className={`font-bold ${
+                                                                questions.reduce((sum, q) => sum + q.compliance_rate, 0) / questions.length >= 90 ? 'text-green-600' :
+                                                                questions.reduce((sum, q) => sum + q.compliance_rate, 0) / questions.length >= 70 ? 'text-yellow-600' :
+                                                                'text-red-600'
+                                                            }`}>
+                                                                {Math.round(questions.reduce((sum, q) => sum + q.compliance_rate, 0) / questions.length)}%
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
+                                                
+                                                <div className="p-6">
+                                                    <div className="space-y-4">
+                                                        {sortedQuestions.map((question, index) => (
+                                                            <div key={question.question_id} className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-300">
+                                                                <div className="flex items-center justify-between mb-3">
+                                                                    <div className="flex items-center space-x-2">
+                                                                        <div className="flex items-center justify-center w-6 h-6 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-xs font-bold">
+                                                                            {index + 1}
+                                                                        </div>
+                                                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                                            question.compliance_rate >= 90 ? 'bg-green-100 text-green-800 border border-green-200' :
+                                                                            question.compliance_rate >= 70 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                                                            'bg-red-100 text-red-800 border border-red-200'
+                                                                        }`}>
+                                                                            {question.compliance_rate}% compliant
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center justify-between mb-3">
+                                                                    <div className="flex items-center space-x-2 cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleQuestionClick(question)}>
+                                                                        <span className="text-xs text-indigo-600 font-medium hover:text-indigo-800 transition-colors">
+                                                                            Click here
+                                                                        </span>
+                                                                        <ChevronRightIcon className="w-4 h-4 text-indigo-600 hover:text-indigo-800 transition-colors" />
+                                                                    </div>
+                                                                    <h4 
+                                                                        className="font-semibold text-gray-900 text-sm cursor-pointer hover:text-indigo-600 transition-colors flex-1 text-right"
+                                                                        onClick={() => handleQuestionClick(question)}
+                                                                    >
+                                                                        {question.question_text.substring(0, 80)}{question.question_text.length > 80 ? '...' : ''}
+                                                                    </h4>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-3 text-xs">
+                                                                    <div className="text-center p-2 bg-white rounded">
+                                                                        <p className="text-2xl font-bold text-gray-600">{question.na_responses}</p>
+                                                                        <p className="text-xs text-gray-600">N/A Responses</p>
+                                                                    </div>
+                                                                    <div className="text-center p-2 bg-green-50 rounded">
+                                                                        <p className="font-medium text-green-600">Positive</p>
+                                                                        <p className="text-lg font-bold text-green-600">{question.positive_responses}</p>
+                                                                    </div>
+                                                                    <div className="text-center p-2 bg-red-50 rounded">
+                                                                        <p className="font-medium text-red-600">Negative</p>
+                                                                        <p className="text-lg font-bold text-red-600">{question.negative_responses}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -862,6 +945,254 @@ export default function ChecklistResponseReports({ auth }) {
                     )}
                 </div>
             </div>
+
+            {/* Question Details Modal */}
+            {showQuestionModal && selectedQuestion && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                    {/* Modal Header */}
+                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-6 border-b border-gray-100 flex-shrink-0">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                                    <QuestionMarkCircleIcon className="w-6 h-6 text-white" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-xl font-bold text-white">Establishment Responses</h3>
+                                    <p className="text-indigo-100 text-sm mt-1">{selectedQuestion.question_text}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseQuestionModal}
+                                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-200"
+                            >
+                                <XCircleIcon className="w-6 h-6 text-white" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <input
+                                type="text"
+                                value={establishmentSearch}
+                                onChange={(e) => setEstablishmentSearch(e.target.value)}
+                                placeholder="Search establishments..."
+                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {loadingQuestionDetails ? (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Summary Stats */}
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                                            <h4 className="font-bold text-green-800">Positive Responses</h4>
+                                        </div>
+                                        <p className="text-3xl font-bold text-green-600">{filterResponses(questionResponses.positive).length}</p>
+                                    </div>
+                                    <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <XCircleIcon className="w-5 h-5 text-red-600" />
+                                            <h4 className="font-bold text-red-800">Negative Responses</h4>
+                                        </div>
+                                        <p className="text-3xl font-bold text-red-600">{filterResponses(questionResponses.negative).length}</p>
+                                    </div>
+                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <ClockIcon className="w-5 h-5 text-gray-600" />
+                                            <h4 className="font-bold text-gray-800">N/A Responses</h4>
+                                        </div>
+                                        <p className="text-3xl font-bold text-gray-600">{filterResponses(questionResponses.na).length}</p>
+                                    </div>
+                                </div>
+
+                                {/* Positive Responses Table */}
+                                {filterResponses(questionResponses.positive).length > 0 && (
+                                    <div className="bg-white border border-green-200 rounded-xl overflow-hidden">
+                                        <div className="bg-green-50 px-4 py-3 border-b border-green-200">
+                                            <h4 className="font-bold text-green-800 flex items-center">
+                                                <CheckCircleIcon className="w-5 h-5 mr-2" />
+                                                Positive Responses ({filterResponses(questionResponses.positive).length})
+                                            </h4>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-green-50/50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Establishment</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Response</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Conditional Fields</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-green-100">
+                                                    {filterResponses(questionResponses.positive).map((response, index) => {
+                                                        const conditionalFields = filterResponses(questionResponses.conditional_fields)
+                                                            .filter(field => field.establishment_name === response.establishment_name);
+                                                        
+                                                        return (
+                                                            <tr key={index} className="hover:bg-green-50">
+                                                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{response.establishment_name}</td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getResponseColor(response.response)}`}>
+                                                                        {response.response}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {conditionalFields.length > 0 ? (
+                                                                        <div className="space-y-1">
+                                                                            {conditionalFields.map((field, fieldIndex) => (
+                                                                                <div key={fieldIndex} className="flex items-center space-x-2">
+                                                                                    <span className="text-xs text-gray-600">{field.field_name}:</span>
+                                                                                    <span className="text-xs font-medium">{field.field_value}</span>
+                                                                                    {field.is_expired === true && (
+                                                                                        <span className="px-1 py-0.5 text-xs font-medium rounded bg-red-100 text-red-800">
+                                                                                            Expired
+                                                                                        </span>
+                                                                                    )}
+                                                                                                                                                                    </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-400">None</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm text-gray-500">{formatDate(response.response_date)}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Negative Responses Table */}
+                                {filterResponses(questionResponses.negative).length > 0 && (
+                                    <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
+                                        <div className="bg-red-50 px-4 py-3 border-b border-red-200">
+                                            <h4 className="font-bold text-red-800 flex items-center">
+                                                <XCircleIcon className="w-5 h-5 mr-2" />
+                                                Negative Responses ({filterResponses(questionResponses.negative).length})
+                                            </h4>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-red-50/50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-red-800 uppercase tracking-wider">Establishment</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-red-800 uppercase tracking-wider">Response</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-red-800 uppercase tracking-wider">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-red-100">
+                                                    {filterResponses(questionResponses.negative).map((response, index) => (
+                                                        <tr key={index} className="hover:bg-red-50">
+                                                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{response.establishment_name}</td>
+                                                            <td className="px-4 py-3 text-sm">
+                                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getResponseColor(response.response)}`}>
+                                                                    {response.response}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-sm text-gray-500">{formatDate(response.response_date)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* N/A Responses Table */}
+                                {filterResponses(questionResponses.na).length > 0 && (
+                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                                            <h4 className="font-bold text-gray-800 flex items-center">
+                                                <ClockIcon className="w-5 h-5 mr-2" />
+                                                N/A Responses ({filterResponses(questionResponses.na).length})
+                                            </h4>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-50/50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">Establishment</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">Response</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">Conditional Fields</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {filterResponses(questionResponses.na).map((response, index) => {
+                                                        const conditionalFields = filterResponses(questionResponses.conditional_fields)
+                                                            .filter(field => field.establishment_name === response.establishment_name);
+                                                        
+                                                        return (
+                                                            <tr key={index} className="hover:bg-gray-50">
+                                                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{response.establishment_name}</td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getResponseColor(response.response)}`}>
+                                                                        {response.response}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm">
+                                                                    {conditionalFields.length > 0 ? (
+                                                                        <div className="space-y-1">
+                                                                            {conditionalFields.map((field, fieldIndex) => (
+                                                                                <div key={fieldIndex} className="flex items-center space-x-2">
+                                                                                    <span className="text-xs text-gray-600">{field.field_name}:</span>
+                                                                                    <span className="text-xs font-medium">{field.field_value}</span>
+                                                                                    {field.is_expired === true && (
+                                                                                        <span className="px-1 py-0.5 text-xs font-medium rounded bg-red-100 text-red-800">
+                                                                                            Expired
+                                                                                        </span>
+                                                                                    )}
+                                                                                                                                                                    </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-400">None</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm text-gray-500">{formatDate(response.response_date)}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* No results message */}
+                                {filterResponses(questionResponses.positive).length === 0 && 
+                                 filterResponses(questionResponses.negative).length === 0 && 
+                                 filterResponses(questionResponses.na).length === 0 && (
+                                    <div className="text-center py-12">
+                                        <InformationCircleIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                        <p className="text-gray-500 text-lg">No responses found for "{establishmentSearch}"</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
         </AuthenticatedLayout>
     );
 }

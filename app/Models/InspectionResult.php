@@ -24,6 +24,10 @@ class InspectionResult extends Model
         'compliance_status',
         'automated_recommendations',
         'photos',
+        // Digital signatures
+        'inspector_signature',
+        'receiver_name',
+        'receiver_signature',
     ];
 
     protected $casts = [
@@ -80,6 +84,14 @@ class InspectionResult extends Model
     public function conditionalFieldResponses(): HasMany
     {
         return $this->hasMany(ConditionalFieldResponse::class);
+    }
+
+    /**
+     * Get the penalties for this inspection result.
+     */
+    public function penalties(): HasMany
+    {
+        return $this->hasMany(Penalty::class);
     }
 
     /**

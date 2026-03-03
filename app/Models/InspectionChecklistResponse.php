@@ -16,6 +16,8 @@ class InspectionChecklistResponse extends Model
         'response',
         'notes',
         'remarks',
+        'complied_at',
+        'compliance_notes',
     ];
 
     /**

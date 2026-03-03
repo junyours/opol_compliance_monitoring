@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Staff;
 use App\Models\Inspection;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -70,13 +71,20 @@ class StaffDashboardController extends Controller
             'upcoming_inspections' => $upcomingInspections->count(),
         ];
         
+        // Generate notifications for this staff
+        $notifications = $staff ? NotificationService::generateNotificationsForStaff($staff) : [
+            'items' => [],
+            'unreadCount' => 0,
+        ];
+        
         return Inertia::render('Staffs/StaffDashboard', [
             'user' => $user,
             'staff' => $staff,
             'stats' => $stats,
             'todayInspections' => $todayInspections,
             'upcomingInspections' => $upcomingInspections,
-            'recentInspections' => $recentInspections
+            'recentInspections' => $recentInspections,
+            'notifications' => $notifications
         ]);
     }
 }

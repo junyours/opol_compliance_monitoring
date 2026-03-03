@@ -24,12 +24,8 @@ export default function Checklist({ auth }) {
   const [questionType, setQuestionType] = useState('text');
   const [options, setOptions] = useState([{ text: '', type: 'neutral' }]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState(null);
-  const [editText, setEditText] = useState('');
-  const [editType, setEditType] = useState('text');
-  const [editOptions, setEditOptions] = useState([{ text: '', type: 'neutral' }]);
-  const [editIsConditional, setEditIsConditional] = useState(false);
-  const [editConditionalLogic, setEditConditionalLogic] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingQuestionData, setEditingQuestionData] = useState(null);
   const [responses, setResponses] = useState({});
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showConditionalModal, setShowConditionalModal] = useState(false);
@@ -75,55 +71,50 @@ export default function Checklist({ auth }) {
   };
 
   const handleEditQuestion = (question) => {
-    console.log('Editing question:', question);
-    console.log('Setting editingQuestion to:', question.id);
-    console.log('Setting editText to:', question.question);
-    console.log('Question conditional_logic:', question.conditional_logic);
-    console.log('Question is_conditional:', question.is_conditional);
-    
-    setEditingQuestion(question.id);
-    setEditText(question.question);
-    setEditType(question.type || 'text');
-    setEditOptions(question.options && question.options.length > 0 ? question.options : [{ text: '', type: 'neutral' }]);
-    setEditIsConditional(question.is_conditional || false);
-    setEditConditionalLogic(question.conditional_logic || null);
+    setEditingQuestionData({
+      ...question,
+      options: question.options && question.options.length > 0 ? question.options : [{ text: '', type: 'neutral' }]
+    });
+    setShowEditModal(true);
   };
 
-  const handleUpdateQuestion = (id) => {
+  const handleUpdateQuestion = () => {
     const updateData = {
-      question: editText,
-      type: editType,
-      options: editType !== 'text' ? editOptions.filter(opt => opt.text && opt.text.trim() !== '') : [],
-      is_conditional: editIsConditional,
-      conditional_logic: editIsConditional ? editConditionalLogic : null
+      question: editingQuestionData.question,
+      type: editingQuestionData.type,
+      options: editingQuestionData.type !== 'text' ? editingQuestionData.options.filter(opt => opt.text && opt.text.trim() !== '') : [],
+      is_conditional: editingQuestionData.is_conditional,
+      conditional_logic: editingQuestionData.is_conditional ? editingQuestionData.conditional_logic : null
     };
 
-    console.log('Updating question with data:', updateData);
-
-    Inertia.put(route('admin.inspection.checklist.update', id), updateData, {
+    Inertia.put(route('admin.inspection.checklist.update', editingQuestionData.id), updateData, {
       onSuccess: () => {
-        setEditingQuestion(null);
-        setEditText('');
-        setEditType('text');
-        setEditOptions([{ text: '', type: 'neutral' }]);
-        setEditIsConditional(false);
-        setEditConditionalLogic(null);
+        setShowEditModal(false);
+        setEditingQuestionData(null);
       }
     });
   };
 
   const addEditOption = () => {
-    setEditOptions([...editOptions, { text: '', type: 'neutral' }]);
+    setEditingQuestionData(prev => ({
+      ...prev,
+      options: [...prev.options, { text: '', type: 'neutral' }]
+    }));
   };
 
   const updateEditOption = (index, value) => {
-    const newOptions = [...editOptions];
-    newOptions[index] = value;
-    setEditOptions(newOptions);
+    setEditingQuestionData(prev => {
+      const newOptions = [...prev.options];
+      newOptions[index] = value;
+      return { ...prev, options: newOptions };
+    });
   };
 
   const removeEditOption = (index) => {
-    setEditOptions(editOptions.filter((_, i) => i !== index));
+    setEditingQuestionData(prev => ({
+      ...prev,
+      options: prev.options.filter((_, i) => i !== index)
+    }));
   };
 
   const handleEditConditionalLogic = () => {
@@ -131,7 +122,10 @@ export default function Checklist({ auth }) {
   };
 
   const handleSaveEditConditionalLogic = (logic) => {
-    setEditConditionalLogic(logic);
+    setEditingQuestionData(prev => ({
+      ...prev,
+      conditional_logic: logic
+    }));
     setShowConditionalModal(false);
   };
 
@@ -285,7 +279,7 @@ export default function Checklist({ auth }) {
 
             <Head title="Check List" />
       
-        <div className="w-full px-3 sm:px-4 lg:px-8 py-4 sm:py-8 space-y-6">
+        <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-8 space-y-6 pr-4 lg:pr-6">
           {/* Stats Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden group">
@@ -364,209 +358,148 @@ export default function Checklist({ auth }) {
             </div>
           </div>
 
-          {/* Categories Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {categories && categories.map((cat) => (
-              <div key={cat.id} className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden">
-                {/* Category Header */}
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-white truncate">{formatCategoryName(cat.name)}</h3>
-                      <p className="text-indigo-100 text-sm mt-1">
-                        {cat.questions ? cat.questions.length : 0} questions
-                      </p>
-                    </div>
-                    <div className="bg-white bg-opacity-20 rounded-lg p-2 ml-3">
-                      <DocumentTextIcon className="w-5 h-5 text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Questions List */}
-                <div className="p-6">
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {cat.questions && cat.questions.length > 0 ? (
-                      cat.questions.map((q, index) => (
-                        <div key={q.id} className="group bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all duration-200">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0 pr-3">
-                              <p className="text-sm font-medium text-gray-900">
-                                <span className="text-indigo-600 font-bold mr-2">{index + 1}.</span>
-                                {q.question}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-2 mt-2">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                                  {q.type || 'text'}
-                                </span>
-                                {q.is_conditional && (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                    <LightBulbIcon className="w-3 h-3 mr-1" />
-                                    Conditional
-                                  </span>
-                                )}
-                                {q.options && q.options.length > 0 && (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                                    {q.options.length} options
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex flex-col space-y-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <button
-                                onClick={() => handleEditQuestion(q)}
-                                className="inline-flex items-center px-2 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                              >
-                                <PencilSquareIcon className="w-3 h-3 mr-1" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteQuestion(q.id)}
-                                className="inline-flex items-center px-2 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                              >
-                                <TrashIcon className="w-3 h-3 mr-1" />
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                          {console.log('Render check - editingQuestion:', editingQuestion, 'q.id:', q.id, 'Should show edit:', editingQuestion === q.id)}
-                          {editingQuestion === q.id && (
-                            <div className="mt-3 p-4 bg-white rounded-lg border border-indigo-200 shadow-sm">
-                              <div className="space-y-4">
-                                {/* Question Text */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">Question Text</label>
-                                  <input
-                                    type="text"
-                                    value={editText}
-                                    onChange={(e) => setEditText(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                    placeholder="Edit question..."
-                                  />
-                                </div>
-
-                                {/* Question Type */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
-                                  <select
-                                    value={editType}
-                                    onChange={(e) => setEditType(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                  >
-                                    <option value="text">Text</option>
-                                    <option value="textarea">Textarea</option>
-                                    <option value="radio">Radio</option>
-                                    <option value="checkbox">Checkbox</option>
-                                    <option value="select">Select</option>
-                                  </select>
-                                </div>
-
-                                {/* Options for Radio/Checkbox/Select */}
-                                {(editType === 'radio' || editType === 'checkbox' || editType === 'select') && (
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Options</label>
-                                    <div className="space-y-2">
-                                      {editOptions.map((option, index) => (
-                                        <div key={index} className="flex items-center space-x-2">
-                                          <input
-                                            type="text"
-                                            value={option.text}
-                                            onChange={(e) => updateEditOption(index, { ...option, text: e.target.value })}
-                                            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                            placeholder="Option text..."
-                                          />
-                                          <select
-                                            value={option.type}
-                                            onChange={(e) => updateEditOption(index, { ...option, type: e.target.value })}
-                                            className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                          >
-                                            <option value="positive">Positive</option>
-                                            <option value="negative">Negative</option>
-                                            <option value="neutral">Neutral</option>
-                                          </select>
-                                          {editOptions.length > 1 && (
-                                            <button
-                                              onClick={() => removeEditOption(index)}
-                                              className="p-2 text-red-600 hover:bg-red-50 rounded"
-                                            >
-                                              <XMarkIcon className="w-4 h-4" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      ))}
-                                      <button
-                                        onClick={addEditOption}
-                                        className="flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                      >
-                                        <PlusIcon className="w-4 h-4 mr-1" />
-                                        Add Option
-                                      </button>
+          {/* Categories Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-indigo-100">
+              <h3 className="text-lg font-semibold text-gray-900">Categories & Questions</h3>
+              <p className="text-sm text-gray-600 mt-1">Manage all inspection questions organized by category</p>
+            </div>
+            
+            <div className="mb-6">
+              <table className="w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Question
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Properties
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {categories && categories.map((cat) => {
+                    const questionCount = cat.questions ? cat.questions.length : 0;
+                    const rowSpan = questionCount > 0 ? questionCount : 1;
+                    
+                    return (
+                      <React.Fragment key={cat.id}>
+                        {cat.questions && cat.questions.length > 0 ? (
+                          cat.questions.map((q, index) => (
+                            <tr key={q.id} className="hover:bg-gray-50 transition-colors duration-150">
+                              {index === 0 && (
+                                <td 
+                                  rowSpan={rowSpan} 
+                                  className="px-6 py-4 whitespace-nowrap align-top bg-gradient-to-br from-indigo-50 to-indigo-100 border-r border-indigo-200"
+                                >
+                                  <div className="flex items-center">
+                                    <div className="p-2 bg-indigo-600 rounded-lg mr-3">
+                                      <DocumentTextIcon className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {formatCategoryName(cat.name)}
+                                      </div>
+                                      <div className="text-xs text-gray-600 mt-1">
+                                        {questionCount} question{questionCount !== 1 ? 's' : ''}
+                                      </div>
                                     </div>
                                   </div>
-                                )}
-
-                                {/* Conditional Question */}
-                                <div>
-                                  <label className="flex items-center space-x-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={editIsConditional}
-                                      onChange={(e) => setEditIsConditional(e.target.checked)}
-                                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Conditional Question</span>
-                                  </label>
-                                  {editIsConditional && (
-                                    <button
-                                      onClick={handleEditConditionalLogic}
-                                      className="ml-4 inline-flex items-center px-3 py-2 border border-indigo-300 text-sm leading-4 font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    >
-                                      <Cog6ToothIcon className="w-4 h-4 mr-1" />
-                                      Configure Logic
-                                    </button>
+                                </td>
+                              )}
+                              <td className="px-6 py-4">
+                                <div className="flex items-start">
+                                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold mr-3 flex-shrink-0">
+                                    {index + 1}
+                                  </span>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-gray-900 leading-relaxed">
+                                      {q.question}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                  {q.type || 'text'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {q.is_conditional && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                      <LightBulbIcon className="w-3 h-3 mr-1" />
+                                      Conditional
+                                    </span>
+                                  )}
+                                  {q.options && q.options.length > 0 && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                      {q.options.length} option{q.options.length !== 1 ? 's' : ''}
+                                    </span>
                                   )}
                                 </div>
-
-                                {/* Action Buttons */}
-                                <div className="flex justify-end space-x-2 pt-2 border-t">
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex items-center justify-end space-x-2">
                                   <button
-                                    onClick={() => {
-                                      setEditingQuestion(null);
-                                      setEditText('');
-                                      setEditType('text');
-                                      setEditOptions([{ text: '', type: 'neutral' }]);
-                                      setEditIsConditional(false);
-                                      setEditConditionalLogic(null);
-                                    }}
-                                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    onClick={() => handleEditQuestion(q)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150"
                                   >
-                                    <XMarkIcon className="w-4 h-4 mr-1" />
-                                    Cancel
+                                    <PencilSquareIcon className="w-3 h-3 mr-1" />
+                                    Edit
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateQuestion(q.id)}
-                                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                    onClick={() => handleDeleteQuestion(q.id)}
+                                    className="inline-flex items-center px-3 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded-lg text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150"
                                   >
-                                    <PlusIcon className="w-4 h-4 mr-1" />
-                                    Save
+                                    <TrashIcon className="w-3 h-3 mr-1" />
+                                    Delete
                                   </button>
                                 </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr key={cat.id} className="hover:bg-gray-50 transition-colors duration-150">
+                            <td className="px-6 py-8 whitespace-nowrap bg-gradient-to-br from-indigo-50 to-indigo-100 border-r border-indigo-200">
+                              <div className="flex items-center">
+                                <div className="p-2 bg-indigo-600 rounded-lg mr-3">
+                                  <DocumentTextIcon className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-900">
+                                    {formatCategoryName(cat.name)}
+                                  </div>
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    No questions
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8">
-                        <QuestionMarkCircleIcon className="mx-auto h-12 w-12 text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-500 font-medium">No questions in this category</p>
-                        <p className="text-xs text-gray-400 mt-1">Click "Add Question" to get started</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+                            </td>
+                            <td colSpan="4" className="px-6 py-8 text-center">
+                              <div className="flex flex-col items-center">
+                                <QuestionMarkCircleIcon className="h-10 w-10 text-gray-400 mb-3" />
+                                <p className="text-sm text-gray-500 font-medium">No questions in this category</p>
+                                <p className="text-xs text-gray-400 mt-1">Click "Add Question" to get started</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Empty State */}
@@ -599,16 +532,158 @@ export default function Checklist({ auth }) {
         onConfigureConditional={handleConfigureConditional}
       />
       
+      {/* Edit Question Modal */}
+      {showEditModal && editingQuestionData && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowEditModal(false)}></div>
+            
+            <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4 rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <PencilSquareIcon className="w-6 h-6 text-white mr-3" />
+                    <h3 className="text-lg font-semibold text-white">Edit Question</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="text-white hover:text-gray-200 transition-colors"
+                  >
+                    <XMarkIcon className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Question Text */}
+                  <div className="lg:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Question Text</label>
+                    <input
+                      type="text"
+                      value={editingQuestionData.question || ''}
+                      onChange={(e) => setEditingQuestionData(prev => ({ ...prev, question: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Edit question..."
+                    />
+                  </div>
+
+                  {/* Question Type */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Question Type</label>
+                    <select
+                      value={editingQuestionData.type || 'text'}
+                      onChange={(e) => setEditingQuestionData(prev => ({ ...prev, type: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="text">Text</option>
+                      <option value="textarea">Textarea</option>
+                      <option value="radio">Radio</option>
+                      <option value="checkbox">Checkbox</option>
+                      <option value="select">Select</option>
+                    </select>
+                  </div>
+
+                  {/* Conditional Question */}
+                  <div>
+                    <label className="flex items-center space-x-2 pt-6">
+                      <input
+                        type="checkbox"
+                        checked={editingQuestionData.is_conditional || false}
+                        onChange={(e) => setEditingQuestionData(prev => ({ ...prev, is_conditional: e.target.checked }))}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Conditional Question</span>
+                    </label>
+                    {editingQuestionData.is_conditional && (
+                      <button
+                        onClick={handleEditConditionalLogic}
+                        className="ml-4 mt-3 inline-flex items-center px-4 py-2 border border-indigo-300 text-sm leading-4 font-medium rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        <Cog6ToothIcon className="w-4 h-4 mr-2" />
+                        Configure Logic
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Options for Radio/Checkbox/Select */}
+                {(editingQuestionData.type === 'radio' || editingQuestionData.type === 'checkbox' || editingQuestionData.type === 'select') && (
+                  <div className="mt-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">Options</label>
+                    <div className="space-y-3">
+                      {editingQuestionData.options?.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <input
+                            type="text"
+                            value={option.text || ''}
+                            onChange={(e) => updateEditOption(index, { ...option, text: e.target.value })}
+                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            placeholder="Option text..."
+                          />
+                          <select
+                            value={option.type || 'neutral'}
+                            onChange={(e) => updateEditOption(index, { ...option, type: e.target.value })}
+                            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          >
+                            <option value="positive">Positive</option>
+                            <option value="negative">Negative</option>
+                            <option value="neutral">Neutral</option>
+                          </select>
+                          {editingQuestionData.options.length > 1 && (
+                            <button
+                              onClick={() => removeEditOption(index)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-150"
+                            >
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={addEditOption}
+                        className="flex items-center px-4 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150"
+                      >
+                        <PlusIcon className="w-4 h-4 mr-2" />
+                        Add Option
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingQuestionData(null);
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150"
+                  >
+                    <XMarkIcon className="w-4 h-4 mr-2" />
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateQuestion}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150"
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <ConditionalQuestionModal
         show={showConditionalModal}
         onClose={() => setShowConditionalModal(false)}
         onSave={handleSaveEditConditionalLogic}
-        conditionalLogic={editConditionalLogic}
-        setConditionalLogic={setEditConditionalLogic}
-        questionOptions={editingQuestion 
-          ? (editType !== 'text' ? editOptions.filter(opt => opt.text && opt.text.trim() !== '') : [])
-          : (questionType !== 'text' ? options.filter(opt => opt.text && opt.text.trim() !== '') : [])
-        }
+        conditionalLogic={editingQuestionData?.conditional_logic}
+        setConditionalLogic={(logic) => setEditingQuestionData(prev => ({ ...prev, conditional_logic: logic }))}
+        questionOptions={editingQuestionData?.type !== 'text' ? editingQuestionData?.options?.filter(opt => opt.text && opt.text.trim() !== '') : []}
       />
     </AuthenticatedLayout>
   );

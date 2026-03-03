@@ -11,13 +11,11 @@ import {
     ExclamationTriangleIcon,
     CalendarIcon,
     ClockIcon,
-    DocumentTextIcon,
     PlusIcon,
     CheckCircleIcon,
     BuildingOfficeIcon,
     UserIcon,
     MagnifyingGlassIcon,
-    FunnelIcon
 } from '@heroicons/react/24/outline';
 
 export default function OpenInspection({ auth }) {
@@ -27,6 +25,7 @@ export default function OpenInspection({ auth }) {
     const [showCompletedModal, setShowCompletedModal] = useState(false);
     const [selectedInspection, setSelectedInspection] = useState(null);
     const [completedInspections, setCompletedInspections] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const {
         showSuccess,
@@ -273,6 +272,51 @@ export default function OpenInspection({ auth }) {
         setCompletedInspections([]);
     };
 
+    // Filter and sort inspections
+    const getFilteredAndSortedInspections = () => {
+        if (!inspections) return [];
+        
+        let filtered = inspections;
+        
+        // Filter by search term
+        if (searchTerm && searchTerm.trim() !== '') {
+            const term = searchTerm.toLowerCase();
+            filtered = inspections.filter(inspection => {
+                if (!inspection.inspection_timestamp) return false;
+                
+                const date = new Date(inspection.inspection_timestamp);
+                const monthName = date.toLocaleString('en-US', { month: 'long' }).toLowerCase();
+                const day = date.getDate();
+                const year = date.getFullYear();
+                
+                // Create natural date format: "February 16 2026"
+                const naturalDateFormat = `${monthName} ${day} ${year}`;
+                
+                // Create comma format: "February 16, 2026"
+                const commaDateFormat = `${monthName} ${day}, ${year}`;
+                
+                // Get the formatted display string: "February-16, 2026 • time"
+                const formattedDisplay = formatDateTime(inspection.inspection_timestamp).toLowerCase();
+                
+                return (
+                    inspection.quarter.toLowerCase().includes(term) ||
+                    inspection.notes?.toLowerCase().includes(term) ||
+                    monthName.includes(term) ||
+                    naturalDateFormat.includes(term) ||
+                    commaDateFormat.includes(term) ||
+                    formattedDisplay.includes(term)
+                );
+            });
+        }
+        
+        // Sort by date (latest first - descending order)
+        return filtered.sort((a, b) => {
+            const dateA = new Date(a.inspection_timestamp);
+            const dateB = new Date(b.inspection_timestamp);
+            return dateB - dateA;
+        });
+    };
+
     const formatDateTime = (timestamp) => {
         const date = new Date(timestamp);
 
@@ -479,10 +523,24 @@ export default function OpenInspection({ auth }) {
                     {/* Inspection List */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Scheduled Inspections</h3>
-                            <p className="text-sm text-gray-500 mt-1">
-                                {inspections?.length || 0} inspection schedules
-                            </p>
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Scheduled Inspections</h3>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        {getFilteredAndSortedInspections().length} of {inspections?.length || 0} inspection schedules
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search by quarter, date, or notes..."
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
@@ -503,7 +561,7 @@ export default function OpenInspection({ auth }) {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {inspections?.length ? inspections.map(inspection => (
+                                    {getFilteredAndSortedInspections().length ? getFilteredAndSortedInspections().map(inspection => (
                                         <tr key={inspection.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -560,10 +618,17 @@ export default function OpenInspection({ auth }) {
                                             <td colSpan="4" className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center">
                                                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                                        <CalendarIcon className="h-8 w-8 text-gray-400" />
+                                                        <MagnifyingGlassIcon className="h-8 w-8 text-gray-400" />
                                                     </div>
-                                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No inspections scheduled</h3>
-                                                    <p className="text-gray-500">Get started by scheduling your first inspection.</p>
+                                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                                        {searchTerm ? 'No inspections found' : 'No inspections scheduled'}
+                                                    </h3>
+                                                    <p className="text-gray-500">
+                                                        {searchTerm 
+                                                            ? 'Try adjusting your search terms.'
+                                                            : 'Get started by scheduling your first inspection.'
+                                                        }
+                                                    </p>
                                                 </div>
                                             </td>
                                         </tr>

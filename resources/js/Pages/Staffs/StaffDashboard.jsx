@@ -6,6 +6,7 @@ import {
     CalendarIcon,
     CheckCircleIcon,
     ClockIcon,
+    BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
 
 export default function StaffDashboard({ auth }) {
@@ -224,7 +225,7 @@ export default function StaffDashboard({ auth }) {
                         <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                             Quick Actions
                         </h3>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <a
                                 href="/staff/inspections/create"
                                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
@@ -240,12 +241,19 @@ export default function StaffDashboard({ auth }) {
                                 View Schedule
                             </a>
                             <a
+                                href="/staff/establishments"
+                                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                            >
+                                <BuildingOfficeIcon className="h-4 w-4 mr-2" />
+                                Manage Establishments
+                            </a>
+                            {/* <a
                                 href="/staff/reports"
                                 className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                             >
                                 <CheckCircleIcon className="h-4 w-4 mr-2" />
                                 Generate Report
-                            </a>
+                            </a> */}
                         </div>
                     </div>
                 </div>

@@ -16,6 +16,8 @@ import {
     Cog6ToothIcon,
     ArrowRightOnRectangleIcon,
     UserIcon,
+    DocumentTextIcon,
+    RectangleStackIcon,
     BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 import Inspection from '@/Pages/Admin/Inspection';
@@ -34,76 +36,29 @@ export default function Authenticated({ user, header, children }) {
                     transform transition-transform duration-300
                     overflow-y-auto
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                    sm:translate-x-0
                 `}
             >
                 {/* LOGO */}
-                <div className="h-16 flex items-center px-6 border-b border-gray-200">
-                    <span className="text-lg font-semibold text-gray-800">
-                        Admin Panel
-                    </span>
+                <div className="h-16 flex items-center px-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+                    <div className="flex items-center space-x-2">
+                        <img src="/images/logo.png" alt="Logo" className="h-7 w-auto" />
+                        <div className="flex flex-col leading-tight">
+                            <span className="text-xs font-semibold text-gray-800">Compliance Monitoring</span>
+                            <span className="text-xs text-gray-600">System</span>
+                        </div>
+                    </div>
                 </div>
 
                 <nav className="mt-6 px-3">
                     <ul className="space-y-1">
 
-                        {/* Dashboard */}
-                        <li>
-                            <NavLink
-                                href={route('admin.dashboard')}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg
-                                           text-gray-700 hover:bg-blue-50 hover:text-blue-600
-                                           transition font-medium"
-                            >
-                                <HomeIcon className="w-5 h-5" />
-                                Dashboard
-                            </NavLink>
-                        </li>
-
                          {/* SECTION LABEL */}
                         <li className="mt-6 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                            Management
+                            Inspection Management
                         </li>
 
-                        {/* Staffs */}
-                        <li>
-                            <NavLink
-                                href={route('admin.staffs.index')}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg
-                                           text-gray-700 hover:bg-blue-50 hover:text-blue-600
-                                           transition font-medium"
-                            >
-                                <UserCircleIcon className="w-5 h-5" />
-                                Staffs
-                            </NavLink>
-                        </li>
-
-                        {/* Establishments */}
-                        <li>
-                            <NavLink
-                                href={route('admin.establishments.index')}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg
-                                           text-gray-700 hover:bg-blue-50 hover:text-blue-600
-                                           transition font-medium"
-                            >
-                                <BuildingOffice2Icon className="w-5 h-5" />
-                                Establishments
-                            </NavLink>
-                        </li>
-
-                        {/* Business Types */}
-                        <li>
-                            <NavLink
-                                href={route('admin.business-types.index-page')}
-                                className="flex items-center gap-3 px-4 py-3 rounded-lg
-                                           text-gray-700 hover:bg-blue-50 hover:text-blue-600
-                                           transition font-medium"
-                            >
-                                <BuildingOfficeIcon className="w-5 h-5" />
-                                Business Types
-                            </NavLink>
-                        </li>
-
+                        
+                       
 
                          {/* Open Inspections */}
                         <li>
@@ -126,7 +81,7 @@ export default function Authenticated({ user, header, children }) {
                                            text-gray-700 hover:bg-blue-50 hover:text-blue-600
                                            transition font-medium"
                             >
-                                <ClipboardDocumentCheckIcon className="w-5 h-5" />
+                                <DocumentTextIcon className="w-5 h-5" />
                                 Manual Inspection
                             </NavLink>
                         </li>
@@ -177,6 +132,19 @@ export default function Authenticated({ user, header, children }) {
                             </NavLink>
                         </li>
 
+                        {/* Establishment Reports */}
+                        <li>
+                            <NavLink
+                                href={route('admin.reports.establishments')}
+                                className="flex items-center gap-3 px-4 py-3 rounded-lg
+                                           text-gray-700 hover:bg-blue-50 hover:text-blue-600
+                                           transition font-medium"
+                            >
+                                <BuildingOfficeIcon className="w-5 h-5" />
+                                Establishment Reports
+                            </NavLink>
+                        </li>
+
                         {/* Comprehensive Data Reports */}
                         <li>
                             <NavLink
@@ -195,20 +163,65 @@ export default function Authenticated({ user, header, children }) {
             </aside>
 
             {/* MAIN */}
-            <div className="flex-1 sm:ml-64">
+            <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
 
                 {/* TOP NAV */}
                 <nav className="bg-gradient-to-r from-blue-600 to-blue-700 border-b border-blue-800 shadow-lg">
                     <div className="px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center h-16">
 
-                            {/* LEFT SIDE - Mobile Toggle */}
+                            {/* LEFT SIDE - Sidebar Toggle */}
                             <div className="flex items-center space-x-4">
                                 <button
                                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                                    className="sm:hidden p-2 rounded-lg text-white hover:bg-white hover:bg-opacity-20 transition-colors duration-200"
+                                    className="relative w-10 h-10 bg-gradient-to-br from-white from-10% to-transparent backdrop-blur-sm rounded-full flex items-center justify-center hover:from-white hover:from-20% transition-all duration-500 border border-white border-opacity-40 shadow-2xl hover:shadow-3xl animate-pulse group"
+                                    title={sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
                                 >
-                                    <Bars3Icon className="h-6 w-6" />
+                                    {/* Multi-layered glowing effects */}
+                                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-300 via-purple-300 to-pink-300 opacity-40 animate-ping"></div>
+                                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 opacity-30 animate-pulse animation-delay-1000"></div>
+                                    
+                                    {/* Rotating ring effect */}
+                                    <div className="absolute -inset-1 rounded-full border-2 border-transparent bg-gradient-to-r from-yellow-400 via-red-400 to-pink-400 opacity-20 animate-spin"></div>
+                                    
+                                    {/* Enhanced particle effects */}
+                                    <div className="absolute top-0 left-2 w-1.5 h-1.5 bg-gradient-to-r from-white to-blue-200 rounded-full animate-bounce animation-delay-200"></div>
+                                    <div className="absolute top-2 right-0 w-1 h-1 bg-gradient-to-r from-white to-purple-200 rounded-full animate-ping animation-delay-400"></div>
+                                    <div className="absolute bottom-1 left-0 w-1 h-1 bg-gradient-to-r from-white to-pink-200 rounded-full animate-pulse animation-delay-600"></div>
+                                    <div className="absolute bottom-0 right-2 w-1.5 h-1.5 bg-gradient-to-r from-white to-cyan-200 rounded-full animate-bounce animation-delay-800"></div>
+                                    <div className="absolute top-3 left-3 w-0.5 h-0.5 bg-white rounded-full animate-pulse animation-delay-300"></div>
+                                    <div className="absolute top-1 right-3 w-0.5 h-0.5 bg-white rounded-full animate-pulse animation-delay-500"></div>
+                                    
+                                    {/* Floating particles */}
+                                    <div className="absolute top-0.5 left-0.5 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse"></div>
+                                    <div className="absolute top-0.5 right-0.5 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse animation-delay-200"></div>
+                                    <div className="absolute bottom-0.5 left-0.5 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse animation-delay-400"></div>
+                                    <div className="absolute bottom-0.5 right-0.5 w-1 h-1 bg-white rounded-full opacity-60 animate-pulse animation-delay-600"></div>
+                                    
+                                    {/* Central glow core */}
+                                    <div className="absolute inset-2 rounded-full bg-white opacity-20 blur-sm animate-pulse"></div>
+                                    
+                                    {/* Main icon with enhanced effects */}
+                                    <div className="relative z-20 transform transition-transform duration-300 group-hover:scale-110">
+                                        {sidebarOpen ? (
+                                            // Three lines when sidebar is open with enhanced styling
+                                            <div className="flex flex-col space-y-0.5">
+                                                <div className="w-4 h-0.5 bg-gradient-to-r from-white to-blue-100 rounded-full shadow-lg"></div>
+                                                <div className="w-4 h-0.5 bg-gradient-to-r from-white to-purple-100 rounded-full shadow-lg"></div>
+                                                <div className="w-4 h-0.5 bg-gradient-to-r from-white to-pink-100 rounded-full shadow-lg"></div>
+                                            </div>
+                                        ) : (
+                                            // Arrow when sidebar is hidden with enhanced styling
+                                            <div className="w-4 h-4 flex items-center justify-center">
+                                                <svg className="w-4 h-4 text-white drop-shadow-lg filter brightness-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Hover enhancement overlay */}
+                                    <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent via-white to-transparent opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
                                 </button>
                                 
                                 {/* Logo on Bottom Left */}
@@ -221,13 +234,70 @@ export default function Authenticated({ user, header, children }) {
                                 </div>
                             </div>
 
-                            {/* CENTER - Logo/Brand */}
-                            <div className="hidden sm:flex items-center justify-center flex-1">
-                                <div className="flex items-center space-x-2">
-                                    <img src="/images/logo.png" alt="MENRO Logo" className="h-8 w-auto" />
-                                    <span className="text-lg font-bold text-white">
-                                        MENRO CMS
-                                    </span>
+                            {/* CENTER - Navigation Links */}
+                            <div className="hidden lg:flex items-center justify-center flex-1 space-x-2">
+                                <div className="flex items-center bg-white bg-opacity-10 backdrop-blur-sm rounded-full p-1 shadow-lg border border-white border-opacity-20">
+                                    <NavLink
+                                        href={route('admin.dashboard')}
+                                        className={({ isActive }) => `
+                                            flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ease-in-out
+                                            ${isActive 
+                                                ? 'bg-white text-blue-700 shadow-md transform scale-105' 
+                                                : 'text-white hover:bg-white hover:bg-opacity-20'
+                                            }
+                                        `}
+                                    >
+                                        <HomeIcon className="h-4 w-4" />
+                                        <span>Home</span>
+                                    </NavLink>
+                                    
+                                    <div className="w-px h-6 bg-white bg-opacity-30 mx-1"></div>
+                                    
+                                    <NavLink
+                                        href={route('admin.staffs.index')}
+                                        className={({ isActive }) => `
+                                            flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ease-in-out
+                                            ${isActive 
+                                                ? 'bg-white text-blue-700 shadow-md transform scale-105' 
+                                                : 'text-white hover:bg-white hover:bg-opacity-20 text-white'
+                                            }
+                                        `}
+                                    >
+                                        <UserCircleIcon className="h-4 w-4" />
+                                        <span>Staffs</span>
+                                    </NavLink>
+                                    
+                                    <div className="w-px h-6 bg-white bg-opacity-30 mx-1"></div>
+                                    
+                                    <NavLink
+                                        href={route('admin.business-types.index-page')}
+                                        className={({ isActive }) => `
+                                            flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ease-in-out
+                                            ${isActive 
+                                                ? 'bg-white text-blue-700 shadow-md transform scale-105' 
+                                                : 'text-white hover:bg-white hover:bg-opacity-20 text-white'
+                                            }
+                                        `}
+                                    >
+                                        <RectangleStackIcon className="h-4 w-4" />
+                                        <span>Business Types</span>
+                                    </NavLink>
+                                    
+                                    <div className="w-px h-6 bg-white bg-opacity-30 mx-1"></div>
+                                    
+                                    <NavLink
+                                        href={route('admin.establishments.index')}
+                                        className={({ isActive }) => `
+                                            flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ease-in-out
+                                            ${isActive 
+                                                ? 'bg-white text-blue-700 shadow-md transform scale-105' 
+                                                : 'text-white hover:bg-white hover:bg-opacity-20 text-white'
+                                            }
+                                        `}
+                                    >
+                                        <BuildingOffice2Icon className="h-4 w-4" />
+                                        <span>Establishments</span>
+                                    </NavLink>
                                 </div>
                             </div>
 
@@ -348,7 +418,7 @@ export default function Authenticated({ user, header, children }) {
                 )}
 
                 {/* CONTENT */}
-                <main className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+                <main className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen pr-6 lg:pr-8">
                     {children}
                 </main>
             </div>

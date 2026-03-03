@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import StaffLayout from '@/Layouts/StaffLayout';
 import {
@@ -46,6 +46,15 @@ export default function InspectionForm({ auth }) {
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
     const [modalShake, setModalShake] = useState(false);
     const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
+    
+    // Signature states
+    const [inspectorSignature, setInspectorSignature] = useState('');
+    const [receiverName, setReceiverName] = useState('');
+    const [receiverSignature, setReceiverSignature] = useState('');
+    const inspectorCanvasRef = useRef(null);
+    const receiverCanvasRef = useRef(null);
+    const [isDrawingInspector, setIsDrawingInspector] = useState(false);
+    const [isDrawingReceiver, setIsDrawingReceiver] = useState(false);
 
     // Simplified category functions
     const getSimplifiedCategoryName = (category) => {
@@ -201,6 +210,163 @@ export default function InspectionForm({ auth }) {
             setUtilityData(initialUtilityData);
         }
     }, [utilities]);
+
+    // Signature drawing functions
+    const setupCanvas = (canvasRef) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        
+        // Set canvas size
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+    };
+
+    const startDrawing = (canvasRef, setIsDrawing) => {
+        setIsDrawing(true);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        
+        // Handle both mouse and touch events
+        const rect = canvas.getBoundingClientRect();
+        let x, y;
+        
+        if (event.type === 'mousedown') {
+            x = event.clientX - rect.left;
+            y = event.clientY - rect.top;
+        } else if (event.type === 'touchstart') {
+            event.preventDefault(); // Prevent scrolling
+            x = event.touches[0].clientX - rect.left;
+            y = event.touches[0].clientY - rect.top;
+        }
+        
+        ctx.moveTo(x, y);
+    };
+
+    const draw = (canvasRef, isDrawing) => {
+        if (!isDrawing) return;
+        
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        let x, y;
+        
+        if (event.type === 'mousemove') {
+            x = event.clientX - rect.left;
+            y = event.clientY - rect.top;
+        } else if (event.type === 'touchmove') {
+            event.preventDefault(); // Prevent scrolling
+            x = event.touches[0].clientX - rect.left;
+            y = event.touches[0].clientY - rect.top;
+        }
+        
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    };
+
+    const stopDrawing = (canvasRef, isDrawingState, setSignature, setIsDrawing) => {
+        if (!isDrawingState) return;
+        
+        setIsDrawing(false);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        // Save signature as data URL
+        const signatureData = canvas.toDataURL();
+        setSignature(signatureData);
+    };
+
+    const clearSignature = (canvasRef, setSignature) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setSignature('');
+    };
+
+    const generateSignature = (canvasRef, setSignature) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Get the current drawing data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Clear canvas for regenerated signature
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Apply signature enhancement
+        ctx.save();
+        
+        // Set signature style
+        ctx.strokeStyle = '#000080'; // Dark blue ink color
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 0.9;
+        
+        // Add subtle shadow for depth
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+        ctx.shadowBlur = 1;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        
+        // Redraw the signature with enhanced style
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Apply smoothing effect
+        const smoothedData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = smoothedData.data;
+        
+        // Simple smoothing algorithm
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] > 0) { // If pixel has alpha (is drawn)
+                // Enhance the stroke
+                data[i] = Math.min(255, data[i] * 1.1);     // R
+                data[i + 1] = Math.min(255, data[i + 1] * 1.1); // G  
+                data[i + 2] = Math.min(255, data[i + 2] * 1.2); // B (more blue)
+            }
+        }
+        
+        ctx.putImageData(smoothedData, 0, 0);
+        ctx.restore();
+        
+        // Add timestamp and signature style
+        ctx.save();
+        ctx.font = 'italic 10px Arial';
+        ctx.fillStyle = '#666';
+        ctx.globalAlpha = 0.5;
+        
+        // Add small signature indicator
+        const date = new Date().toLocaleDateString();
+        ctx.fillText('Digitally Signed: ' + date, 5, canvas.height - 5);
+        ctx.restore();
+        
+        // Save the enhanced signature
+        const signatureData = canvas.toDataURL('image/png');
+        setSignature(signatureData);
+    };
+
+    // Setup canvases when modal opens
+    useEffect(() => {
+        if (showConfirmationModal) {
+            setTimeout(() => {
+                setupCanvas(inspectorCanvasRef);
+                setupCanvas(receiverCanvasRef);
+            }, 100);
+        }
+    }, [showConfirmationModal]);
 
     
     const handleEstablishmentSelect = (establishmentId) => {
@@ -497,7 +663,7 @@ export default function InspectionForm({ auth }) {
                 ...prev[questionId],
                 question_id: questionId,
                 response: response,
-                notes: prev[questionId]?.notes || '',
+                notes: response ? (prev[questionId]?.notes || '') : '', // Clear notes when response is cleared
                 remarks: prev[questionId]?.remarks || ''
             }
         }));
@@ -698,11 +864,16 @@ export default function InspectionForm({ auth }) {
         // Check for validation warnings
         const hasWarnings = progress < 100;
         
-        if (hasWarnings) {
+        // Check for signature validation
+        const hasInspectorSignature = inspectorSignature && inspectorSignature.trim() !== '';
+        const hasReceiverName = receiverName && receiverName.trim() !== '';
+        const hasReceiverSignature = receiverSignature && receiverSignature.trim() !== '';
+        
+        if (hasWarnings || !hasInspectorSignature || !hasReceiverName || !hasReceiverSignature) {
             // Trigger shake animation
             setModalShake(true);
             setTimeout(() => setModalShake(false), 600);
-            return; // Don't submit if there are warnings
+            return; // Don't submit if there are warnings or missing signatures
         }
         
         // Combine automated recommendations with manual recommendations
@@ -722,6 +893,10 @@ export default function InspectionForm({ auth }) {
             recommendation_checks: recommendationChecks,
             compliance_status: isCompliant ? 'compliant' : 'not_compliant',
             automated_recommendations: automatedRecommendations,
+            // Add signature data
+            inspector_signature: inspectorSignature,
+            receiver_name: receiverName,
+            receiver_signature: receiverSignature,
         };
 
         console.log('Form Data Being Submitted:', {
@@ -729,7 +904,10 @@ export default function InspectionForm({ auth }) {
             automated_recommendations: formData.automated_recommendations,
             isCompliant,
             automatedRecommendationsCount: automatedRecommendations.length,
-            checklistResponsesCount: Object.keys(checklistResponses).length
+            checklistResponsesCount: Object.keys(checklistResponses).length,
+            hasInspectorSignature,
+            hasReceiverName,
+            hasReceiverSignature
         });
 
         router.post('/staff/inspection/store', formData);
@@ -1311,18 +1489,22 @@ export default function InspectionForm({ auth }) {
                                                                 </div>
                                                             )}
                                                             
-                                                            <div>
-                                                                <label className="block text-xs font-medium text-gray-700 mb-1">
-                                                                    Notes
-                                                                </label>
-                                                                <textarea
-                                                                    value={checklistResponses[question.id]?.notes || ''}
-                                                                    onChange={(e) => handleNotesChange(question.id, e.target.value)}
-                                                                    rows={2}
-                                                                    className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                                    placeholder="Add additional notes (optional)"
-                                                                />
-                                                            </div>
+                                                            {/* Only show Notes field when a response is selected */}
+                                                            {checklistResponses[question.id]?.response && (
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                                        Notes
+                                                                    </label>
+                                                                    <textarea
+                                                                        value={checklistResponses[question.id]?.notes || ''}
+                                                                        onChange={(e) => handleNotesChange(question.id, e.target.value)}
+                                                                        rows={2}
+                                                                        className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                                        placeholder="Notes cannot be edited..."
+                                                                        readOnly
+                                                                    />
+                                                                </div>
+                                                            )}
                                                             <div>
                                                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                                                     Remarks
@@ -1543,7 +1725,7 @@ export default function InspectionForm({ auth }) {
                 {/* Confirmation Modal */}
                 {showConfirmationModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className={`bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto ${
+                        <div className={`bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto ${
                             modalShake ? 'animate-shake' : ''
                         }`}>
                             <div className="flex justify-between items-center mb-4">
@@ -1598,6 +1780,113 @@ export default function InspectionForm({ auth }) {
                                     </div>
                                 )}
                                 
+                                {/* Digital Signatures Section */}
+                                <div className="border-t pt-4">
+                                    <h4 className="text-md font-semibold text-gray-900 mb-4">Digital Signatures</h4>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Inspector Signature */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Inspector Signature <span className="text-red-500">*</span>
+                                            </label>
+                                            <div className="border-2 border-gray-300 rounded-lg p-2 bg-white">
+                                                <canvas
+                                                    ref={inspectorCanvasRef}
+                                                    className="w-full h-32 border border-gray-200 rounded cursor-crosshair touch-none"
+                                                    onMouseDown={() => startDrawing(inspectorCanvasRef, setIsDrawingInspector)}
+                                                    onMouseMove={() => draw(inspectorCanvasRef, isDrawingInspector)}
+                                                    onMouseUp={() => stopDrawing(inspectorCanvasRef, isDrawingInspector, setInspectorSignature, setIsDrawingInspector)}
+                                                    onMouseLeave={() => stopDrawing(inspectorCanvasRef, isDrawingInspector, setInspectorSignature, setIsDrawingInspector)}
+                                                    onTouchStart={() => startDrawing(inspectorCanvasRef, setIsDrawingInspector)}
+                                                    onTouchMove={() => draw(inspectorCanvasRef, isDrawingInspector)}
+                                                    onTouchEnd={() => stopDrawing(inspectorCanvasRef, isDrawingInspector, setInspectorSignature, setIsDrawingInspector)}
+                                                />
+                                            </div>
+                                            <div className="mt-2 flex justify-between items-center">
+                                                <span className="text-xs text-gray-500">Draw your signature above</span>
+                                                <div className="flex space-x-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => generateSignature(inspectorCanvasRef, setInspectorSignature)}
+                                                        className="text-xs text-green-600 hover:text-green-800"
+                                                    >
+                                                        Generate
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => clearSignature(inspectorCanvasRef, setInspectorSignature)}
+                                                        className="text-xs text-red-600 hover:text-red-800"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {!inspectorSignature && (
+                                                <p className="text-xs text-red-600 mt-1">Inspector signature is required</p>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Receiver Section */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Receiver Information <span className="text-red-500">*</span>
+                                            </label>
+                                            
+                                            {/* Receiver Name Input */}
+                                            <div className="mb-3">
+                                                <input
+                                                    type="text"
+                                                    value={receiverName}
+                                                    onChange={(e) => setReceiverName(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter receiver's full name"
+                                                />
+                                                {!receiverName && (
+                                                    <p className="text-xs text-red-600 mt-1">Receiver name is required</p>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Receiver Signature */}
+                                            <div className="border-2 border-gray-300 rounded-lg p-2 bg-white">
+                                                <canvas
+                                                    ref={receiverCanvasRef}
+                                                    className="w-full h-32 border border-gray-200 rounded cursor-crosshair touch-none"
+                                                    onMouseDown={() => startDrawing(receiverCanvasRef, setIsDrawingReceiver)}
+                                                    onMouseMove={() => draw(receiverCanvasRef, isDrawingReceiver)}
+                                                    onMouseUp={() => stopDrawing(receiverCanvasRef, isDrawingReceiver, setReceiverSignature, setIsDrawingReceiver)}
+                                                    onMouseLeave={() => stopDrawing(receiverCanvasRef, isDrawingReceiver, setReceiverSignature, setIsDrawingReceiver)}
+                                                    onTouchStart={() => startDrawing(receiverCanvasRef, setIsDrawingReceiver)}
+                                                    onTouchMove={() => draw(receiverCanvasRef, isDrawingReceiver)}
+                                                    onTouchEnd={() => stopDrawing(receiverCanvasRef, isDrawingReceiver, setReceiverSignature, setIsDrawingReceiver)}
+                                                />
+                                            </div>
+                                            <div className="mt-2 flex justify-between items-center">
+                                                <span className="text-xs text-gray-500">Receiver signature above</span>
+                                                <div className="flex space-x-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => generateSignature(receiverCanvasRef, setReceiverSignature)}
+                                                        className="text-xs text-green-600 hover:text-green-800"
+                                                    >
+                                                        Generate
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => clearSignature(receiverCanvasRef, setReceiverSignature)}
+                                                        className="text-xs text-red-600 hover:text-red-800"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {!receiverSignature && (
+                                                <p className="text-xs text-red-600 mt-1">Receiver signature is required</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 {/* Warning for incomplete */}
                                 {progress < 100 && (
                                     <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
@@ -1606,6 +1895,19 @@ export default function InspectionForm({ auth }) {
                                             <div>
                                                 <div className="text-sm text-orange-800 font-medium">Incomplete Inspection</div>
                                                 <div className="text-xs text-orange-700">You have answered {Object.keys(checklistResponses).length} out of {totalQuestions} questions. Are you sure you want to submit?</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Signature validation warning */}
+                                {(!inspectorSignature || !receiverName || !receiverSignature) && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <div className="flex items-center">
+                                            <ExclamationCircleIcon className="h-5 w-5 text-red-600 mr-2" />
+                                            <div>
+                                                <div className="text-sm text-red-800 font-medium">Missing Signatures</div>
+                                                <div className="text-xs text-red-700">All signature fields are required before submission.</div>
                                             </div>
                                         </div>
                                     </div>

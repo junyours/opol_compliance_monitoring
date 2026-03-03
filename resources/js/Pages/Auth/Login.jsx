@@ -286,7 +286,6 @@ export default function Login({ status, canResetPassword, accountLocked }) {
                 <footer className="relative z-10 py-4 text-center border-t border-white/10">
                     <div className="text-xs text-purple-200 space-y-1">
                         <p>&copy; 2024 MENRO - Municipal Environment and Natural Resources Office. All rights reserved.</p>
-                        <p className="opacity-50">Developed by: Jessther Jay C. Salon II</p>
                     </div>
                 </footer>
             </div>

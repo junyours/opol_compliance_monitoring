@@ -11,11 +11,14 @@ use App\Models\Establishment;
 use App\Models\ChecklistQuestion;
 use App\Models\Utility;
 use App\Models\InspectionCategory;
+use App\Models\Penalty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\InspectionReportMail;
 
 class InspectionResultController extends Controller
 {
@@ -55,6 +58,10 @@ class InspectionResultController extends Controller
             'recommendation_checks.comply_lacking_permits' => 'boolean',
             'recommendation_checks.provide_lacking_facilities' => 'boolean',
             'recommendation_checks.others' => 'boolean',
+            // Signature validations
+            'inspector_signature' => 'required|string',
+            'receiver_name' => 'required|string|max:255',
+            'receiver_signature' => 'required|string',
         ]);
 
         try {
@@ -73,6 +80,10 @@ class InspectionResultController extends Controller
                 'status' => 'submitted',
                 'compliance_status' => $validated['compliance_status'] ?? null,
                 'automated_recommendations' => $validated['automated_recommendations'] ?? null,
+                // Add signature fields
+                'inspector_signature' => $validated['inspector_signature'],
+                'receiver_name' => $validated['receiver_name'],
+                'receiver_signature' => $validated['receiver_signature'],
             ]);
 
             // Store checklist responses
@@ -129,6 +140,39 @@ class InspectionResultController extends Controller
     }
 
     /**
+     * Get penalties for an establishment.
+     */
+    public function getEstablishmentPenalties(Establishment $establishment)
+    {
+        $penalties = Penalty::where('establishment_id', $establishment->id)
+            ->with(['inspection', 'inspectionResult'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'penalties' => $penalties
+        ]);
+    }
+
+    /**
+     * Get previous unpaid penalties for penalty assignment.
+     */
+    public function getPreviousUnpaidPenalties(Establishment $establishment)
+    {
+        $unpaidPenalties = Penalty::where('establishment_id', $establishment->id)
+            ->where('status', 'unpaid')
+            ->with(['inspection', 'inspectionResult'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'unpaid_penalties' => $unpaidPenalties
+        ]);
+    }
+
+    /**
      * Generate PDF for inspection result.
      */
     public function generatePDF(InspectionResult $inspectionResult)
@@ -163,6 +207,84 @@ class InspectionResultController extends Controller
         return $dompdf->stream($filename, [
             'Attachment' => true
         ]);
+    }
+
+    /**
+     * Email PDF for inspection result.
+     */
+    public function emailPDF(Request $request, InspectionResult $inspectionResult)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'subject' => 'nullable|string|max:255',
+            'message' => 'nullable|string|max:1000'
+        ]);
+
+        try {
+            // Configure Dompdf
+            $options = new Options([
+                'defaultFont' => 'Times New Roman',
+                'isRemoteEnabled' => false,
+                'isHtml5ParserEnabled' => true,
+                'isPhpEnabled' => true,
+                'chroot' => public_path(),
+            ]);
+            
+            $dompdf = new Dompdf($options);
+            
+            // Get HTML content
+            $html = $this->getPDFHTML($inspectionResult);
+            
+            // Load HTML
+            $dompdf->loadHtml($html);
+            
+            // Set paper size and orientation
+            $dompdf->setPaper('A4', 'portrait');
+            
+            // Render PDF
+            $dompdf->render();
+            
+            // Save PDF to temporary file
+            $filename = 'inspection-result-' . $inspectionResult->id . '-' . date('Y-m-d') . '.pdf';
+            $tempDir = storage_path('app/temp');
+            
+            // Create temp directory if it doesn't exist
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            
+            $pdfPath = $tempDir . '/' . $filename;
+            file_put_contents($pdfPath, $dompdf->output());
+            
+            // Send email
+            Mail::to($request->email)->send(new InspectionReportMail(
+                $inspectionResult,
+                $pdfPath,
+                $request->subject ?? 'Inspection Report',
+                $request->message ?? 'Please find attached the inspection report.'
+            ));
+            
+            // Clean up temporary file
+            if (file_exists($pdfPath)) {
+                unlink($pdfPath);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'PDF successfully sent to ' . $request->email
+            ]);
+            
+        } catch (\Exception $e) {
+            // Clean up temporary file if it exists
+            if (isset($pdfPath) && file_exists($pdfPath)) {
+                unlink($pdfPath);
+            }
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send email: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -268,6 +390,58 @@ class InspectionResultController extends Controller
         }
         .main-table {
             width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .signature-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+        .signature-section {
+            margin-top: 40px;
+            page-break-inside: avoid;
+        }
+        .signature-container {
+            position: relative;
+            height: 60px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .signature-content {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .signature-content img {
+            max-height: 25px;
+            max-width: 100px;
+            object-fit: contain;
+        }
+        .printed-name {
+            border-bottom: 1px solid #000;
+            display: inline-block;
+            padding: 0 10px;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 200px;
+            text-align: center;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .signature-info {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
             border-collapse: collapse;
             margin-bottom: 10px;
             font-size: 11px;
@@ -414,19 +588,25 @@ class InspectionResultController extends Controller
             $opolLogoBase64 = 'data:image/png;base64,' . base64_encode($opolLogoData);
         }
         
-        $html .= '<div class="header">
-            <div class="header-content">
-                <img src="' . $opolLogoBase64 . '" class="logo" alt="Opol Logo">
-                <img src="' . $logoBase64 . '" class="logo" alt="Logo">
-            </div>
-            <div class="header-text">
-                <h1>Republic of the Philippines</h1>
-                <h2>Province of Misamis Oriental</h2>
-                <h2>Municipality of Opol</h2>
-                <h2>--o0o--</h2>
-                <h2 class="menro">Municipal Environmental and Natural Resources Office</h2>
-            </div>
-        </div>';
+        $html .= '<table style="width: 100%; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px;">
+            <tr>
+                <td style="width: 80px; vertical-align: middle; text-align: left;">
+                    <img src="' . $opolLogoBase64 . '" alt="Left Logo" width="80">
+                </td>
+                <td style="text-align: center; vertical-align: middle;">
+                    <h3 style="margin: 0; font-size: 14px; font-weight: bold;">Republic of the Philippines</h3>
+                    <p style="margin: 2px 0; font-size: 12px;">Province of Misamis Oriental</p>
+                    <p style="margin: 2px 0; font-size: 12px;">Municipality of Opol</p>
+                    <p style="margin: 2px 0; font-size: 12px;">--o0o--</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: bold; font-family: \"Old English Text MT\", \"Times New Roman\", serif;">
+                        Municipal Environmental and Natural Resources Office
+                    </p>
+                </td>
+                <td style="width: 80px; vertical-align: middle; text-align: right;">
+                    <img src="' . $logoBase64 . '" alt="Right Logo" width="80">
+                </td>
+            </tr>
+        </table>';
 
         // Main Information Table
         $html .= '<table class="main-table">
@@ -437,7 +617,7 @@ class InspectionResultController extends Controller
                 <td width="15%" class="label">Business Name:</td>
                 <td width="35%" class="value">' . htmlspecialchars($establishment->name ?? 'N/A') . '</td>
                 <td width="15%" class="label">Business Type:</td>
-                <td width="35%" class="value">' . htmlspecialchars($establishment->type_of_business ?? 'N/A') . '</td>
+                <td width="35%" class="value">' . htmlspecialchars($establishment->businessType->name ?? 'N/A') . '</td>
             </tr>
             <tr>
                 <td class="label">Address:</td>
@@ -589,30 +769,48 @@ class InspectionResultController extends Controller
                     <input type="checkbox" ' . ($inspectionResult->others_recommendation ? 'checked' : '') . ' disabled> Others
                 </td>
             </tr>
-            <tr>
-                <td class="label">Detailed Recs:</td>
-                <td colspan="3" class="value">' . nl2br(htmlspecialchars($inspectionResult->recommendations ?: 'No recommendations')) . '</td>
-            </tr>
-        </table>';
+            </table>';
 
         // Footer with signatures - matching the image format
         $html .= '<div class="signature-section">
             <table class="signature-table">
                 <tr>
                     <td>
-                        <strong>INSPECTED BY :</strong>
-                        <div class="signature-line"></div>
-                        <div>' . htmlspecialchars(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')) . '</div>
-                        <div>Inspector</div>
+                        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+                            <strong>INSPECTOR SIGNATURE :</strong>
+                            <span style="position: relative; display: inline-block; border-bottom: 1px solid #000; padding: 0 5px;">
+                                ' . htmlspecialchars(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')) . '
+                                ';
+                        
+                        // Add inspector signature image if available
+                        if ($inspectionResult->inspector_signature) {
+                            $html .= '<img src="' . $inspectionResult->inspector_signature . '" style="position: absolute; top: -50px; left: 50%; transform: translateX(-50%); height: 50px; max-width: 200px;" alt="Inspector Signature" />';
+                        }
+                        
+                        $html .= '</span>
+                        </div>
                     </td>
                 </tr>
                 <tr>
-                    <td style="padding-top: 15px;">
-                        <strong>RECIEVE & CONFORMED BY:</strong>
-                        <div class="signature-line"></div>
-                        <div style="display: flex; gap: 20px;">
-                            <span><strong>DATE :</strong> _______________</span>
-                            <span><strong>TIME:</strong> _______________</span>
+                    <td style="padding-top: 20px;">
+                        <div style="display: flex; align-items: center; gap: 15px; margin-bottom:5px;">
+                            <strong>RECEIVER NAME & SIGNATURE:</strong>
+                            <span style="position: relative; display: inline-block; border-bottom: 1px solid #000; padding: 0 5px;">
+                                ' . htmlspecialchars($inspectionResult->receiver_name) . '
+                                ';
+                        
+                        // Add receiver signature image if available
+                        if ($inspectionResult->receiver_signature) {
+                            $html .= '<img src="' . $inspectionResult->receiver_signature . '" style="position: absolute; top: -50px; left: 50%; transform: translateX(-50%); height: 50px; max-width: 200px;" alt="Receiver Signature" />';
+                        }
+                        
+                        $html .= '</span>
+                            <span style="position: relative; display: inline-block; border-bottom: 1px solid #000; padding: 0 5px;">
+                                <strong>DATE :</strong> ' . ($inspectionResult->updated_at ? date('M d, Y', strtotime($inspectionResult->updated_at)) : '___________') . '
+                            </span>
+                            <span style="position: relative; display: inline-block; border-bottom: 1px solid #000; padding: 0 5px;">
+                                <strong>TIME:</strong> ' . ($inspectionResult->updated_at ? date('h:i A', strtotime($inspectionResult->updated_at)) : '___________') . '
+                            </span>
                         </div>
                     </td>
                 </tr>
@@ -638,7 +836,8 @@ class InspectionResultController extends Controller
             'staff',
             'checklistResponses.checklistQuestion.category',
             'utilityData.utility',
-            'conditionalFieldResponses.checklistQuestion'
+            'conditionalFieldResponses.checklistQuestion',
+            'penalties'
         ]);
 
         // Group conditional field responses by question for easier display
@@ -651,9 +850,34 @@ class InspectionResultController extends Controller
             $groupedConditionalFields[$questionId][$conditionalField->field_name] = $conditionalField->field_value;
         }
 
+        // Group penalties by type for easier display
+        $groupedPenalties = [];
+        foreach ($inspectionResult->penalties as $penalty) {
+            $groupedPenalties[$penalty->penalty_type] = [
+                'description' => $penalty->description,
+                'amount' => $penalty->amount,
+                'status' => $penalty->status,
+                'document' => $penalty->document_path ? [
+                    'path' => $penalty->document_path,
+                    'name' => $penalty->document_name,
+                    'url' => $penalty->document_url,
+                ] : null,
+            ];
+        }
+
+        // Get previous unpaid penalties for this establishment
+        $previousUnpaidPenalties = Penalty::where('establishment_id', $inspectionResult->establishment_id)
+            ->where('status', 'unpaid')
+            ->where('inspection_result_id', '!=', $inspectionResult->id) // Exclude current inspection penalties
+            ->with(['inspection', 'inspectionResult'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         return Inertia::render('Admin/InspectionResultView', [
             'inspectionResult' => $inspectionResult,
             'groupedConditionalFields' => $groupedConditionalFields,
+            'penalties' => $groupedPenalties,
+            'previousUnpaidPenalties' => $previousUnpaidPenalties,
         ]);
     }
 
@@ -718,12 +942,17 @@ class InspectionResultController extends Controller
                 'automated_recommendations' => 'nullable|array',
                 'checklist_responses' => 'nullable|array',
                 'checklist_responses.*.id' => 'required|exists:inspection_checklist_responses,id',
+                'checklist_responses.*.response' => 'nullable|string',
                 'checklist_responses.*.notes' => 'nullable|string',
                 'checklist_responses.*.remarks' => 'nullable|string',
                 'conditional_fields' => 'nullable|array',
                 'other_remarks' => 'nullable|string',
                 'recommendations' => 'nullable|string',
+                'penalties' => 'nullable|array',
             ]);
+            
+            // Get penalties data separately
+            $penaltiesData = $request->input('penalties', []);
         } else {
             $validated = $request->validate([
                 'establishment_id' => 'required|exists:establishments,id',
@@ -759,9 +988,153 @@ class InspectionResultController extends Controller
                     foreach ($validated['checklist_responses'] as $responseData) {
                         $response = InspectionChecklistResponse::find($responseData['id']);
                         if ($response && $response->inspection_result_id === $inspectionResult->id) {
-                            $response->update([
-                                'notes' => $responseData['notes'] ?? $response->notes,
+                            $updateData = [
+                                'notes' => array_key_exists('notes', $responseData) ? $responseData['notes'] : $response->notes,
                                 'remarks' => $responseData['remarks'] ?? $response->remarks,
+                            ];
+                            
+                            // Update response if provided
+                            if (isset($responseData['response'])) {
+                                $updateData['response'] = $responseData['response'];
+                            }
+                            
+                            $response->update($updateData);
+                        }
+                    }
+                }
+
+                // Update conditional fields if provided
+                if (isset($validated['conditional_fields'])) {
+                    // First, get all existing conditional field responses for this inspection result
+                    $existingConditionalFields = ConditionalFieldResponse::where('inspection_result_id', $inspectionResult->id)->get();
+                    
+                    // Create a set of existing field identifiers for comparison
+                    $existingFields = [];
+                    foreach ($existingConditionalFields as $field) {
+                        $existingFields[] = $field->checklist_question_id . '_' . $field->field_name;
+                    }
+                    
+                    // Track fields that should be kept
+                    $fieldsToKeep = [];
+                    
+                    // Update or create new conditional fields
+                    foreach ($validated['conditional_fields'] as $questionId => $fields) {
+                        foreach ($fields as $fieldName => $fieldValue) {
+                            ConditionalFieldResponse::updateOrCreate(
+                                [
+                                    'inspection_result_id' => $inspectionResult->id,
+                                    'checklist_question_id' => $questionId,
+                                    'field_name' => $fieldName,
+                                ],
+                                [
+                                    'field_value' => $fieldValue,
+                                ]
+                            );
+                            
+                            // Mark this field as to be kept
+                            $fieldsToKeep[] = $questionId . '_' . $fieldName;
+                        }
+                    }
+                    
+                    // Remove fields that are no longer needed (when response changed away from trigger)
+                    $fieldsToRemove = array_diff($existingFields, $fieldsToKeep);
+                    foreach ($fieldsToRemove as $fieldIdentifier) {
+                        list($questionId, $fieldName) = explode('_', $fieldIdentifier, 2);
+                        ConditionalFieldResponse::where('inspection_result_id', $inspectionResult->id)
+                            ->where('checklist_question_id', $questionId)
+                            ->where('field_name', $fieldName)
+                            ->delete();
+                    }
+                }
+
+                // Update penalties if provided
+                if (!empty($penaltiesData)) {
+                    foreach ($penaltiesData as $penaltyType => $penaltyData) {
+                        if (is_array($penaltyData) && (isset($penaltyData['description']) || isset($penaltyData['amount']))) {
+                            // Check if this penalty should be created (only if previous penalty is paid or this is first_penalty)
+                            $canCreatePenalty = true;
+                            
+                            if ($penaltyType === 'second_penalty') {
+                                // Check if first_penalty exists and is paid
+                                $firstPenalty = Penalty::where('inspection_result_id', $inspectionResult->id)
+                                    ->where('penalty_type', 'first_penalty')
+                                    ->first();
+                                
+                                if ($firstPenalty && $firstPenalty->status !== 'paid') {
+                                    $canCreatePenalty = false;
+                                }
+                            } elseif ($penaltyType === 'third_penalty') {
+                                // Check if second_penalty exists and is paid
+                                $secondPenalty = Penalty::where('inspection_result_id', $inspectionResult->id)
+                                    ->where('penalty_type', 'second_penalty')
+                                    ->first();
+                                
+                                if ($secondPenalty && $secondPenalty->status !== 'paid') {
+                                    $canCreatePenalty = false;
+                                }
+                            }
+                            
+                            if ($canCreatePenalty) {
+                                Penalty::updateOrCreate(
+                                    [
+                                        'inspection_result_id' => $inspectionResult->id,
+                                        'penalty_type' => $penaltyType,
+                                    ],
+                                    [
+                                        'establishment_id' => $inspectionResult->establishment_id,
+                                        'inspection_id' => $inspectionResult->inspection_id,
+                                        'description' => $penaltyData['description'] ?? null,
+                                        'amount' => $penaltyData['amount'] ?? 0,
+                                        'status' => 'unpaid', // Default status for new penalties
+                                    ]
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Staff update logic - UPDATE existing responses instead of deleting and recreating
+                $inspectionResult->update([
+                    'establishment_id' => $validated['establishment_id'],
+                    'other_remarks' => $validated['other_remarks'] ?? null,
+                    'recommendations' => $validated['recommendations'] ?? null,
+                    'comply_lacking_permits' => $validated['recommendation_checks']['comply_lacking_permits'] ?? false,
+                    'provide_lacking_facilities' => $validated['recommendation_checks']['provide_lacking_facilities'] ?? false,
+                    'others_recommendation' => $validated['recommendation_checks']['others'] ?? false,
+                ]);
+
+                // Update existing checklist responses instead of deleting and recreating
+                if (isset($validated['checklist_responses'])) {
+                    foreach ($validated['checklist_responses'] as $responseData) {
+                        $response = InspectionChecklistResponse::where('inspection_result_id', $inspectionResult->id)
+                            ->where('checklist_question_id', $responseData['question_id'])
+                            ->first();
+                        
+                        if ($response) {
+                            // Update existing response - handle explicit null values
+                            $updateData = [
+                                'response' => $responseData['response'] ?? $response->response,
+                            ];
+                            
+                            // Only include notes if explicitly provided in request
+                            if (array_key_exists('notes', $responseData)) {
+                                $updateData['notes'] = $responseData['notes'];
+                            }
+                            
+                            // Only include remarks if explicitly provided in request
+                            if (array_key_exists('remarks', $responseData)) {
+                                $updateData['remarks'] = $responseData['remarks'];
+                            }
+                            
+                            $response->update($updateData);
+                        } else {
+                            // Create new response if it doesn't exist
+                            InspectionChecklistResponse::create([
+                                'inspection_result_id' => $inspectionResult->id,
+                                'checklist_question_id' => $responseData['question_id'],
+                                'response' => $responseData['response'],
+                                'notes' => $responseData['notes'] ?? null,
+                                'remarks' => $responseData['remarks'] ?? null,
                             ]);
                         }
                     }
@@ -784,36 +1157,12 @@ class InspectionResultController extends Controller
                         }
                     }
                 }
-            } else {
-                // Staff update logic
-                $inspectionResult->update([
-                    'establishment_id' => $validated['establishment_id'],
-                    'other_remarks' => $validated['other_remarks'] ?? null,
-                    'recommendations' => $validated['recommendations'] ?? null,
-                    'comply_lacking_permits' => $validated['recommendation_checks']['comply_lacking_permits'] ?? false,
-                    'provide_lacking_facilities' => $validated['recommendation_checks']['provide_lacking_facilities'] ?? false,
-                    'others_recommendation' => $validated['recommendation_checks']['others'] ?? false,
-                ]);
 
-                // Delete existing checklist responses
-                $inspectionResult->checklistResponses()->delete();
-
-                // Store updated checklist responses
-                foreach ($validated['checklist_responses'] as $response) {
-                    InspectionChecklistResponse::create([
-                        'inspection_result_id' => $inspectionResult->id,
-                        'checklist_question_id' => $response['question_id'],
-                        'response' => $response['response'],
-                        'notes' => $response['notes'] ?? null,
-                        'remarks' => $response['remarks'] ?? null,
-                    ]);
-                }
-
-                // Delete existing utility data
-                $inspectionResult->utilityData()->delete();
-
-                // Store updated utility data
+                // Update utility data if provided
                 if (!empty($validated['utility_data'])) {
+                    // Delete existing utility data for this inspection result
+                    $inspectionResult->utilityData()->delete();
+                    
                     foreach ($validated['utility_data'] as $utilityId => $data) {
                         if (!empty($data)) {
                             InspectionUtilityData::create([
@@ -1122,7 +1471,8 @@ class InspectionResultController extends Controller
         $inspectionResults = InspectionResult::with([
             'inspection',
             'staff.user',
-            'checklistResponses.checklistQuestion'
+            'checklistResponses.checklistQuestion',
+            'conditionalFieldResponses.checklistQuestion'
         ])
         ->where('establishment_id', $establishment->id)
         ->orderBy('created_at', 'desc')
@@ -1153,7 +1503,8 @@ class InspectionResultController extends Controller
                     'created_at' => $result->created_at->format('Y-m-d H:i:s'),
                     'updated_at' => $result->updated_at->format('Y-m-d H:i:s'),
                     'total_questions' => $result->checklistResponses->count(),
-                    'responses_summary' => $this->summarizeResponses($result->checklistResponses)
+                    'responses_summary' => $this->summarizeResponses($result->checklistResponses),
+                    'conditional_field_responses' => $this->groupConditionalFieldResponses($result->conditionalFieldResponses)
                 ];
             })
         ]);
@@ -1190,6 +1541,72 @@ class InspectionResultController extends Controller
 
         return $summary;
     }
+
+    /**
+     * Group conditional field responses by question.
+     */
+    private function groupConditionalFieldResponses($conditionalFieldResponses)
+    {
+        $grouped = [];
+        
+        foreach ($conditionalFieldResponses as $response) {
+            $questionId = $response->checklist_question_id;
+            
+            if (!isset($grouped[$questionId])) {
+                // Get the checklist response to check for expiration notes
+                $checklistResponse = $response->inspectionResult->checklistResponses
+                    ->where('checklist_question_id', $questionId)
+                    ->first();
+                
+                // Check if expired based on notes
+                $isExpired = false;
+                $expiredNotes = '';
+                
+                if ($checklistResponse && !empty($checklistResponse->notes)) {
+                    // Check if notes contain expiration keywords
+                    $notes = strtolower($checklistResponse->notes);
+                    if (str_contains($notes, 'expire') || str_contains($notes, 'expired') || 
+                        str_contains($notes, 'expir') || str_contains($notes, 'expiry')) {
+                        $isExpired = true;
+                        $expiredNotes = $checklistResponse->notes;
+                    }
+                }
+                
+                $grouped[$questionId] = [
+                    'question_text' => $response->checklistQuestion->question_text ?? '',
+                    'question_name' => $response->checklistQuestion->question ?? '',
+                    'response' => '',
+                    'is_expired' => $isExpired,
+                    'expired_notes' => $expiredNotes,
+                    'fields' => []
+                ];
+            }
+            
+            $grouped[$questionId]['fields'][$response->field_name] = $response->field_value;
+        }
+        
+        return $grouped;
+    }
+
+    /**
+     * Check if conditional field is expired
+     */
+    private function isConditionalFieldExpired($fieldValue, $inspectionDate)
+    {
+        if (empty($fieldValue) || $fieldValue === 'N/A') {
+            return null; // Not applicable
+        }
+
+        try {
+            $expiryDate = \Carbon\Carbon::parse($fieldValue);
+            $inspectionDate = \Carbon\Carbon::parse($inspectionDate);
+            
+            return $expiryDate->lt($inspectionDate);
+        } catch (\Exception $e) {
+            return null; // Not a date field
+        }
+    }
+
     public function uploadPhotos(Request $request, InspectionResult $inspectionResult)
     {
         $request->validate([

@@ -63,6 +63,60 @@ const ComprehensiveDataReports = () => {
     const [selectedQuestion, setSelectedQuestion] = useState(null);
     const [selectedField, setSelectedField] = useState(null);
 
+    const fetchFilterOptions = async () => {
+        try {
+            console.log('Fetching filter options...');
+            
+            // Fetch establishments
+            try {
+                const establishmentsRes = await fetch('/admin/reports/filters/establishments');
+                console.log('Establishments response status:', establishmentsRes.status);
+                if (establishmentsRes.ok) {
+                    const establishmentsData = await establishmentsRes.json();
+                    console.log('Establishments data:', establishmentsData);
+                    setEstablishments(establishmentsData);
+                } else {
+                    console.error('Establishments request failed:', establishmentsRes.status);
+                }
+            } catch (error) {
+                console.error('Error fetching establishments:', error);
+            }
+
+            // Fetch categories
+            try {
+                const categoriesRes = await fetch('/admin/reports/filters/categories');
+                console.log('Categories response status:', categoriesRes.status);
+                if (categoriesRes.ok) {
+                    const categoriesData = await categoriesRes.json();
+                    console.log('Categories data:', categoriesData);
+                    setCategories(categoriesData);
+                } else {
+                    console.error('Categories request failed:', categoriesRes.status);
+                }
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+            }
+
+            // Fetch questions
+            try {
+                const questionsRes = await fetch('/admin/reports/filters/questions');
+                console.log('Questions response status:', questionsRes.status);
+                if (questionsRes.ok) {
+                    const questionsData = await questionsRes.json();
+                    console.log('Questions data:', questionsData);
+                    setQuestions(questionsData);
+                } else {
+                    console.error('Questions request failed:', questionsRes.status);
+                }
+            } catch (error) {
+                console.error('Error fetching questions:', error);
+            }
+            
+        } catch (error) {
+            console.error('Error fetching filter options:', error);
+        }
+    };
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -94,59 +148,6 @@ const ComprehensiveDataReports = () => {
             }
             
             setResponseData(data);
-            
-            // Extract unique establishments, categories, and questions for filters
-            if (data.expired_checklist_responses && data.expired_checklist_responses.length > 0) {
-                const uniqueEstablishments = [...new Set(data.expired_checklist_responses.map(r => 
-                    r.inspectionResult?.establishment?.id
-                ).filter(Boolean))];
-                
-                const establishmentOptions = uniqueEstablishments.map(id => {
-                    const establishment = data.expired_checklist_responses.find(r => 
-                        r.inspectionResult?.establishment?.id === id
-                    )?.inspectionResult?.establishment;
-                    return establishment ? {
-                        id: establishment.id,
-                        name: establishment.name
-                    } : null;
-                }).filter(Boolean);
-                
-                setEstablishments(establishmentOptions);
-                
-                const uniqueCategories = [...new Set(data.expired_checklist_responses.map(r => 
-                    r.checklistQuestion?.inspectionCategory?.id
-                ).filter(Boolean))];
-                
-                const categoryOptions = uniqueCategories.map(id => {
-                    const category = data.expired_checklist_responses.find(r => 
-                        r.checklistQuestion?.inspectionCategory?.id === id
-                    )?.checklistQuestion?.inspectionCategory;
-                    return category ? {
-                        id: category.id,
-                        name: category.name
-                    } : null;
-                }).filter(Boolean);
-                
-                setCategories(categoryOptions);
-                
-                const uniqueQuestions = [...new Set(data.expired_checklist_responses.map(r => 
-                    r.checklist_question_id
-                ).filter(Boolean))];
-                
-                const questionOptions = uniqueQuestions.map(id => {
-                    const question = data.expired_checklist_responses.find(r => 
-                        r.checklist_question_id === id
-                    )?.checklistQuestion;
-                    return question ? {
-                        id: question.id,
-                        text: question.question,
-                        category: question.inspectionCategory?.name || 'Uncategorized'
-                    } : null;
-                }).filter(Boolean);
-                
-                setQuestions(questionOptions);
-            }
-            
         } catch (error) {
             console.error('Error fetching comprehensive data:', error);
             // Set empty data on error to prevent crashes
@@ -174,7 +175,9 @@ const ComprehensiveDataReports = () => {
     };
 
     useEffect(() => {
-        fetchData();
+        fetchFilterOptions().then(() => {
+            fetchData();
+        });
     }, []);
 
     const handleViewDetails = (questionId) => {
@@ -210,10 +213,7 @@ const ComprehensiveDataReports = () => {
             category_id: '',
             question_id: ''
         });
-        // Clear filter options as well
-        setEstablishments([]);
-        setCategories([]);
-        setQuestions([]);
+        // Don't clear filter options as they're fetched from backend
     };
 
     // Group conditional fields by field name for field analysis

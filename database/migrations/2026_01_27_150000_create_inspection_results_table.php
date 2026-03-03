@@ -33,6 +33,11 @@ return new class extends Migration
             // Automated recommendations (JSON)
             $table->json('automated_recommendations')->nullable();
             
+            // Digital signatures
+            $table->text('inspector_signature')->nullable(); // Base64 image data
+            $table->string('receiver_name')->nullable(); // Receiver's full name
+            $table->text('receiver_signature')->nullable(); // Base64 image data
+            
             $table->timestamps();
             
             // Indexes

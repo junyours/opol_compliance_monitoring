@@ -21,24 +21,42 @@ class EstablishmentController extends Controller
         ]);
     }
 
+    // Show establishments for staff
+    public function staffIndex()
+    {
+        $establishments = Establishment::with('businessType')->get();
+        $businessTypes = BusinessType::active()->orderBy('name')->get();
+        
+        return Inertia::render('Staffs/Establishments', [
+            'establishments' => $establishments,
+            'businessTypes' => $businessTypes
+        ]);
+    }
+
     // Store new establishment
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'proponent' => 'required|string|max:255',
-            'address' => 'required|string|max:255',
-            'contact_number' => 'required|string|max:20',
-            'email' => 'required|email|unique:establishments,email',
-            'type_of_business_id' => 'required|exists:business_types,id',
-            'Barangay' => 'required|string|max:255',
-            'total_capacity' => 'required|integer|min:0',
-            'number_of_rooms' => 'required|integer|min:0',
-            'number_of_employees' => 'required|integer|min:0',
-            'status' => 'required|in:active,inactive,terminated',
+            'name' => 'nullable|string|max:255',
+            'proponent' => 'nullable|string|max:255',
+            'address' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:20',
+            'email' => 'nullable|email|unique:establishments,email',
+            'type_of_business_id' => 'nullable|exists:business_types,id',
+            'Barangay' => 'nullable|string|max:255',
+            'total_capacity' => 'nullable|integer|min:0',
+            'number_of_rooms' => 'nullable|integer|min:0',
+            'number_of_employees' => 'nullable|integer|min:0',
+            'status' => 'nullable|in:active,inactive,terminated',
         ]);
 
         Establishment::create($validated);
+
+        // Redirect based on user role
+        if (auth()->user()->role === 'staff') {
+            return redirect()->route('staff.establishments.index')
+                             ->with('success', 'Establishment created successfully!');
+        }
 
         return redirect()->route('admin.establishments.index')
                          ->with('success', 'Establishment created successfully!');
@@ -52,17 +70,17 @@ class EstablishmentController extends Controller
         \Log::info('Update method called for establishment ID: ' . $establishment->id);
         
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'proponent' => 'required|string|max:255',
-            'address' => 'required|string|max:255',
-            'contact_number' => 'required|string|max:20',
-            'email' => 'required|email|unique:establishments,email,' . $establishment->id,
-            'type_of_business_id' => 'required|exists:business_types,id',
-            'Barangay' => 'required|string|max:255',
-            'total_capacity' => 'required|integer|min:0',
-            'number_of_rooms' => 'required|integer|min:0',
-            'number_of_employees' => 'required|integer|min:0',
-            'status' => 'required|in:active,inactive,terminated',
+            'name' => 'nullable|string|max:255',
+            'proponent' => 'nullable|string|max:255',
+            'address' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:20',
+            'email' => 'nullable|email|unique:establishments,email,' . $establishment->id,
+            'type_of_business_id' => 'nullable|exists:business_types,id',
+            'Barangay' => 'nullable|string|max:255',
+            'total_capacity' => 'nullable|integer|min:0',
+            'number_of_rooms' => 'nullable|integer|min:0',
+            'number_of_employees' => 'nullable|integer|min:0',
+            'status' => 'nullable|in:active,inactive,terminated',
         ]);
 
         // Debug logging
@@ -73,6 +91,12 @@ class EstablishmentController extends Controller
         
         \Log::info('Update result: ' . ($result ? 'success' : 'failed'));
         \Log::info('Establishment after update: ', $establishment->fresh()->toArray());
+
+        // Redirect based on user role
+        if (auth()->user()->role === 'staff') {
+            return redirect()->route('staff.establishments.index')
+                             ->with('success', 'Establishment updated successfully!');
+        }
 
         return redirect()->route('admin.establishments.index')
                          ->with('success', 'Establishment updated successfully!');

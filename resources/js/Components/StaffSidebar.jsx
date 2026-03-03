@@ -17,7 +17,7 @@ export default function StaffSidebar({ isOpen, onClose, upcomingCount = 0 }) {
         { name: 'Dashboard', href: '/staff/dashboard', icon: HomeIcon },
         { name: 'My Inspection', href: '/staff/inspections', icon: ClipboardDocumentListIcon },
         { name: 'Schedule', href: '/staff/schedule', icon: CalendarIcon },
-        { name: 'Profile', href: '/staff/profile', icon: UserIcon },
+        { name: 'Profile', href: route('staff.profile.edit'), icon: UserIcon },
     ];
 
     const isActive = (href) => {

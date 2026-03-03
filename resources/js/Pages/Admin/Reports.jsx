@@ -230,7 +230,7 @@ export default function Reports({ auth, reports = [] }) {
             <Head title="Reports" />
 
             <div className="p-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 min-h-screen">
-                <div className="w-full space-y-8">
+                <div className="w-full space-y-6">
                     {/* Flash Messages */}
                     {flash && flash.success && (
                         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 shadow-sm">
@@ -241,8 +241,8 @@ export default function Reports({ auth, reports = [] }) {
                         </div>
                     )}
 
-                    {/* Filters Section */}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
+                    {/* Filters Container */}
+                    <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
                         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
@@ -335,151 +335,165 @@ export default function Reports({ auth, reports = [] }) {
                                         <option value="professional">Professional Reports</option>
                                     </select>
                                 </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Charts Section */}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
+                    {/* Metrics Cards Container */}
+                    <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
+                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-100">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm">
+                                    <ChartBarIcon className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900">Key Metrics</h3>
+                            </div>
+                        </div>
+                        
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-gradient-to-br from-emerald-400 via-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg border border-white/20 backdrop-blur-sm hover:scale-105 transition-all duration-300 hover:shadow-xl">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-semibold text-white/90">Total Inspections</p>
+                                            <p className="text-3xl font-bold text-white">
+                                                {reportsData.find(r => r.type === 'inspection')?.total_inspections || 0}
+                                            </p>
+                                            <div className="flex items-center space-x-1 text-xs text-white/80">
+                                                <ArrowTrendingUpIcon className="w-3 h-3" />
+                                                <span>+12% from last month</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                                            <ClipboardDocumentCheckIcon className="w-8 h-8 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-blue-400 via-indigo-500 to-blue-600 rounded-2xl p-6 shadow-lg border border-white/20 backdrop-blur-sm hover:scale-105 transition-all duration-300 hover:shadow-xl">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-semibold text-white/90">Compliance Rate</p>
+                                            <p className="text-3xl font-bold text-white">
+                                                {(() => {
+                                                    const inspectionReport = reportsData.find(r => r.type === 'inspection');
+                                                    return inspectionReport ? 
+                                                        getComplianceRate(inspectionReport.compliant_count, inspectionReport.total_inspections) : 0;
+                                                })()}%
+                                            </p>
+                                            <div className="flex items-center space-x-1 text-xs text-white/80">
+                                                <ArrowTrendingUpIcon className="w-3 h-3" />
+                                                <span>+5% improvement</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                                            <ChartPieIcon className="w-8 h-8 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 rounded-2xl p-6 shadow-lg border border-white/20 backdrop-blur-sm hover:scale-105 transition-all duration-300 hover:shadow-xl">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-semibold text-white/90">Pending Items</p>
+                                            <p className="text-3xl font-bold text-white">
+                                                {reportsData.reduce((sum, r) => sum + r.pending_count, 0)}
+                                            </p>
+                                            <div className="flex items-center space-x-1 text-xs text-white/80">
+                                                <ClockIcon className="w-3 h-3" />
+                                                <span>Requires attention</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                                            <ClockIcon className="w-8 h-8 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-purple-400 via-violet-500 to-purple-600 rounded-2xl p-6 shadow-lg border border-white/20 backdrop-blur-sm hover:scale-105 transition-all duration-300 hover:shadow-xl">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-semibold text-white/90">Active Reports</p>
+                                            <p className="text-3xl font-bold text-white">
+                                                {reportsData.length}
+                                            </p>
+                                            <div className="flex items-center space-x-1 text-xs text-white/80">
+                                                <DocumentTextIcon className="w-3 h-3" />
+                                                <span>This period</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                                            <DocumentTextIcon className="w-8 h-8 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Charts Container */}
+                    <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
                         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-100">
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-white rounded-lg shadow-sm">
                                     <Squares2X2Icon className="w-5 h-5 text-indigo-600" />
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-900">Visual Analytics</h3>
+                                
                             </div>
                         </div>
                         
                         <div className="p-6">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 {/* Compliance Pie Chart */}
-                                <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-md hover:shadow-lg transition-all duration-300">
                                     <PieChartComponent 
                                         data={getPieDataForChart()}
                                         title="Compliance Distribution"
-                                        height={220}
+                                        height={250}
                                     />
                                 </div>
 
                                 {/* Inspection Types Bar Chart */}
-                                <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-md hover:shadow-lg transition-all duration-300">
                                     <BarChartComponent 
                                         data={getBarDataForChart()}
                                         title="Report Categories"
-                                        height={220}
-                                    />
-                                </div>
-
-                                {/* Quarterly Trend Line Chart */}
-                                <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                                        <h4 className="text-sm font-bold text-gray-900">Quarterly Performance</h4>
-                                        <div className="flex flex-wrap gap-1">
-                                            {['total', 'compliant', 'non_compliant', 'pending'].map((view) => (
-                                                <button
-                                                    key={view}
-                                                    onClick={() => setQuarterlyTrendView(view)}
-                                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                                                        quarterlyTrendView === view 
-                                                            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-sm' 
-                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
-                                                >
-                                                    {view.charAt(0).toUpperCase() + view.slice(1).replace('_', '-')}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <LineChartComponent 
-                                        data={getQuarterlyDataForChart(quarterlyTrendView)}
-                                        height={220}
+                                        height={250}
                                     />
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Stats Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="bg-gradient-to-br from-emerald-400 via-green-500 to-emerald-600 rounded-2xl p-6 shadow-xl border border-white/20 backdrop-blur-sm transform hover:scale-105 transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium text-white/90">Total Inspections</p>
-                                    <p className="text-3xl font-bold text-white">
-                                        {reportsData.find(r => r.type === 'inspection')?.total_inspections || 0}
-                                    </p>
-                                    <div className="flex items-center space-x-1 text-xs text-white/80">
-                                        <ArrowTrendingUpIcon className="w-3 h-3" />
-                                        <span>+12% from last month</span>
+                            {/* Quarterly Trend Line Chart */}
+                            <div className="mt-6 bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-md hover:shadow-lg transition-all duration-300">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                                    <h4 className="text-lg font-bold text-gray-900">Quarterly Performance</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['total', 'compliant', 'non_compliant', 'pending'].map((view) => (
+                                            <button
+                                                key={view}
+                                                onClick={() => setQuarterlyTrendView(view)}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                                                    quarterlyTrendView === view 
+                                                        ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md' 
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {view.charAt(0).toUpperCase() + view.slice(1).replace('_', '-')}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <ClipboardDocumentCheckIcon className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-blue-400 via-indigo-500 to-blue-600 rounded-2xl p-6 shadow-xl border border-white/20 backdrop-blur-sm transform hover:scale-105 transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium text-white/90">Compliance Rate</p>
-                                    <p className="text-3xl font-bold text-white">
-                                        {(() => {
-                                            const inspectionReport = reportsData.find(r => r.type === 'inspection');
-                                            return inspectionReport ? 
-                                                getComplianceRate(inspectionReport.compliant_count, inspectionReport.total_inspections) : 0;
-                                        })()}%
-                                    </p>
-                                    <div className="flex items-center space-x-1 text-xs text-white/80">
-                                        <ArrowTrendingUpIcon className="w-3 h-3" />
-                                        <span>+5% improvement</span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <ChartPieIcon className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 rounded-2xl p-6 shadow-xl border border-white/20 backdrop-blur-sm transform hover:scale-105 transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium text-white/90">Pending Items</p>
-                                    <p className="text-3xl font-bold text-white">
-                                        {reportsData.reduce((sum, r) => sum + r.pending_count, 0)}
-                                    </p>
-                                    <div className="flex items-center space-x-1 text-xs text-white/80">
-                                        <ClockIcon className="w-3 h-3" />
-                                        <span>Requires attention</span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <ClockIcon className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-purple-400 via-violet-500 to-purple-600 rounded-2xl p-6 shadow-xl border border-white/20 backdrop-blur-sm transform hover:scale-105 transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium text-white/90">Active Reports</p>
-                                    <p className="text-3xl font-bold text-white">
-                                        {reportsData.length}
-                                    </p>
-                                    <div className="flex items-center space-x-1 text-xs text-white/80">
-                                        <DocumentTextIcon className="w-3 h-3" />
-                                        <span>This period</span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <DocumentTextIcon className="w-8 h-8 text-white" />
-                                </div>
+                                <LineChartComponent 
+                                    data={getQuarterlyDataForChart(quarterlyTrendView)}
+                                    height={250}
+                                />
                             </div>
                         </div>
                     </div>
-                    </div>
 
-                    {/* Daily Inspections Chart */}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
+                    {/* Daily Trends Container */}
+                    <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100/50 overflow-hidden">
                         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-100">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center space-x-3">
@@ -506,10 +520,10 @@ export default function Reports({ auth, reports = [] }) {
                             </div>
                         </div>
                         <div className="p-6">
-                            <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100">
+                            <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-100 shadow-md hover:shadow-lg transition-all duration-300">
                                 <LineChartComponent 
                                     data={getDailyInspectionData(dailyInspectionView)}
-                                    height={320}
+                                    height={350}
                                 />
                             </div>
                         </div>

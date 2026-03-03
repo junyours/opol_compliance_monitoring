@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use App\Http\Controllers\InspectionController;
 use App\Http\Controllers\InspectionResultController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\EstablishmentReportController;
 use App\Http\Controllers\StaffDashboardController;
 use App\Http\Controllers\StaffScheduleController;
 use App\Http\Controllers\StaffController;
@@ -17,6 +18,10 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UtilityController;
 use App\Http\Controllers\AdminInspectionController;
+use App\Http\Controllers\PenaltyController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\StaffProfileController;
+use App\Http\Controllers\NoticeToComplyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,6 +32,19 @@ use App\Http\Controllers\AdminInspectionController;
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+// General dashboard route that redirects based on user role
+Route::get('/dashboard', function () {
+    if (auth()->check()) {
+        $user = auth()->user();
+        if ($user->role === 'staff') {
+            return redirect()->route('staff.dashboard');
+        } elseif ($user->role === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
+    }
+    return redirect()->route('login');
+})->middleware('auth');
 
 
 
@@ -114,9 +132,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('/inspection-results/{inspectionResult}', [InspectionResultController::class, 'update'])->name('inspection-results.update');
     Route::post('/inspection-results/{inspectionResult}/upload-photos', [InspectionResultController::class, 'uploadPhotos'])->name('inspection-results.upload-photos');
     Route::get('/inspection-results/{inspectionResult}/pdf', [InspectionResultController::class, 'generatePDF'])->name('inspection-results.pdf');
+    Route::post('/inspection-results/{inspectionResult}/email-pdf', [InspectionResultController::class, 'emailPDF'])->name('inspection-results.email-pdf');
     
     // Establishment inspection history
     Route::get('/establishments/{establishment}/inspection-history', [InspectionResultController::class, 'getEstablishmentInspectionHistory'])->name('establishments.inspection-history');
+    
+    // Establishment penalties
+    Route::get('/establishments/{establishment}/penalties', [InspectionResultController::class, 'getEstablishmentPenalties'])->name('establishments.penalties');
     
     // Admin manual inspection entry routes
     Route::get('/inspection/create', [AdminInspectionController::class, 'create'])->name('admin.inspection.create');
@@ -124,6 +146,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     // Establishment Monitoring
     Route::get('/monitoring', [InspectionResultController::class, 'monitoring'])->name('monitoring.index');
+
+    // Penalty routes
+    Route::post('/penalties/upload-document', [PenaltyController::class, 'uploadDocument'])->name('penalties.upload-document');
+    Route::get('/penalties/inspection-result/{inspectionResultId}', [PenaltyController::class, 'getByInspectionResult'])->name('penalties.by-inspection-result');
+    Route::get('/penalties/establishment/{establishment}/previous-unpaid', [InspectionResultController::class, 'getPreviousUnpaidPenalties'])->name('penalties.previous-unpaid');
+    Route::put('/penalties/{penalty}', [PenaltyController::class, 'updatePenalty'])->name('penalties.update');
+    Route::patch('/penalties/{penalty}/status', [PenaltyController::class, 'updateStatus'])->name('penalties.update-status');
+    Route::delete('/penalties/{penalty}/document', [PenaltyController::class, 'deleteDocument'])->name('penalties.delete-document');
 
     // Reports
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
@@ -134,9 +164,29 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/reports/checklist-responses', [ReportsController::class, 'checklistResponses'])->name('reports.checklist-responses');
     Route::get('/reports/checklist-responses/data', [ReportsController::class, 'getChecklistResponseData'])->name('reports.checklist-responses.data');
     Route::get('/reports/checklist-responses/export', [ReportsController::class, 'exportChecklistResponses'])->name('reports.checklist-responses.export');
+    Route::get('/reports/checklist-responses/question-details/{questionId}', [ReportsController::class, 'getQuestionDetails'])->name('reports.checklist-responses.question-details');
+    
+    // Establishment Reports
+    Route::get('/reports/establishments', [EstablishmentReportController::class, 'index'])->name('reports.establishments');
+    Route::get('/reports/establishments/data', [EstablishmentReportController::class, 'getData'])->name('reports.establishments.data');
+    Route::get('/reports/establishments/export', [EstablishmentReportController::class, 'export'])->name('reports.establishments.export');
     
     Route::get('/reports/comprehensive-data', [ReportsController::class, 'getComprehensiveDataReports'])->name('reports.comprehensive-data');
     Route::get('/reports/comprehensive-data/page', [ReportsController::class, 'comprehensiveDataPage'])->name('reports.comprehensive-data.page');
+    
+    // Filter options for comprehensive data reports
+    Route::get('/reports/filters/establishments', [ReportsController::class, 'getEstablishmentsForFilters'])->name('reports.filters.establishments');
+    Route::get('/reports/filters/categories', [ReportsController::class, 'getCategoriesForFilters'])->name('reports.filters.categories');
+    Route::get('/reports/filters/questions', [ReportsController::class, 'getQuestionsForFilters'])->name('reports.filters.questions');
+    
+    // Notice to Comply routes
+    Route::get('/notice-to-comply', [NoticeToComplyController::class, 'index'])->name('notice-to-comply.index');
+    Route::get('/notice-to-comply/data', [NoticeToComplyController::class, 'getData'])->name('notice-to-comply.data');
+    Route::post('/notice-to-comply/{id}/comply', [NoticeToComplyController::class, 'markAsComplied'])->name('notice-to-comply.comply');
+    Route::get('/notice-to-comply/export', [NoticeToComplyController::class, 'export'])->name('notice-to-comply.export');
+    Route::get('/notice-to-comply/excel', [NoticeToComplyController::class, 'exportExcel'])->name('notice-to-comply.excel');
+    Route::get('/notice-to-comply/establishments', [NoticeToComplyController::class, 'getEstablishmentsForFilters'])->name('notice-to-comply.establishments');
+    Route::get('/notice-to-comply/questions', [NoticeToComplyController::class, 'getQuestionsForFilters'])->name('notice-to-comply.questions');
     
     // Debug route for comprehensive data
     Route::get('/debug/comprehensive-data', function() {
@@ -262,15 +312,31 @@ Route::middleware(['auth', 'staff'])->prefix('staff')->name('staff.')->group(fun
     Route::get('/schedule/{inspection}/create', [StaffScheduleController::class, 'create'])->name('inspection.create');
     Route::post('/inspection/store', [InspectionResultController::class, 'store'])->name('inspection.store');
     
+    // Establishment routes for staff
+    Route::get('/establishments', [EstablishmentController::class, 'staffIndex'])->name('establishments.index');
+    Route::post('/establishments', [EstablishmentController::class, 'store'])->name('establishments.store');
+    Route::put('/establishments/{establishment}', [EstablishmentController::class, 'update'])->name('establishments.update');
+    
     // Inspection results routes
     Route::get('/inspections', [InspectionResultController::class, 'myInspections'])->name('inspections.index');
     Route::get('/inspections/{inspectionResult}', [InspectionResultController::class, 'show'])->name('inspections.show');
     Route::get('/inspections/{inspectionResult}/edit', [InspectionResultController::class, 'edit'])->name('inspections.edit');
     Route::put('/inspections/{inspectionResult}', [InspectionResultController::class, 'update'])->name('inspections.update');
     
+    // Notification routes
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
+    Route::post('/notifications/clear-old', [NotificationController::class, 'clearOld'])->name('notifications.clear-old');
+    Route::get('/notifications/count', [NotificationController::class, 'getCount'])->name('notifications.count');
+    
+    // Profile routes
+    Route::get('/profile', [StaffProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [StaffProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/signature', [StaffProfileController::class, 'saveSignature'])->name('profile.signature.save');
+    Route::delete('/profile', [StaffProfileController::class, 'destroy'])->name('profile.destroy');
+    
     // Add more staff routes here as needed
     // Route::get('/reports', [StaffReportController::class, 'index'])->name('reports');
-    // Route::get('/profile', [StaffProfileController::class, 'edit'])->name('profile');
 });
 
 // Utilities routes (outside admin group)

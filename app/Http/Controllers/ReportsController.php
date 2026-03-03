@@ -92,8 +92,15 @@ class ReportsController extends Controller
             });
         }
         if (!empty($filters['quarter'])) {
-            $query->whereHas('inspectionResult.inspection', function($q) use ($filters) {
-                $q->where('quarter', $filters['quarter']);
+            // Handle both "Q2" and "2" formats - database stores "Q1, Q2, Q3, Q4"
+            $quarterValue = $filters['quarter'];
+            if (strpos($quarterValue, 'Q') === 0) {
+                $quarterValue = substr($quarterValue, 1); // Remove 'Q' prefix if present
+            }
+            // Convert back to database format (add 'Q' prefix)
+            $dbQuarterValue = 'Q' . $quarterValue;
+            $query->whereHas('inspectionResult.inspection', function($q) use ($dbQuarterValue) {
+                $q->where('quarter', $dbQuarterValue);
             });
         }
         if (!empty($filters['year'])) {
@@ -304,7 +311,8 @@ class ReportsController extends Controller
             'applicable_responses' => $applicableResponses,
             'overall_compliance_rate' => $overallComplianceRate,
             'unique_establishments' => $responses->pluck('inspectionResult.establishment_id')->unique()->count(),
-            'unique_questions' => $responses->pluck('checklist_question_id')->unique()->count()
+            'unique_questions' => $responses->pluck('checklist_question_id')->unique()->count(),
+            'establishment_names' => $responses->pluck('inspectionResult.establishment.name')->unique()->values()->toArray()
         ];
     }
 
@@ -475,6 +483,13 @@ class ReportsController extends Controller
         \Log::info('=== Comprehensive Data Reports Debug ===');
         \Log::info('Received filters:', $filters);
         
+        // Debug quarter format
+        if (!empty($filters['quarter'])) {
+            \Log::info('Quarter filter received: "' . $filters['quarter'] . '"');
+            \Log::info('Quarter filter length: ' . strlen($filters['quarter']));
+            \Log::info('Quarter first character: "' . $filters['quarter'][0] . '"');
+        }
+        
         // Get expired InspectionChecklistResponse records
         $expiredChecklistResponses = InspectionChecklistResponse::with([
             'inspectionResult.inspection', 
@@ -499,8 +514,16 @@ class ReportsController extends Controller
             });
         }
         if (!empty($filters['quarter'])) {
-            $expiredChecklistResponses->whereHas('inspectionResult.inspection', function($q) use ($filters) {
-                $q->where('quarter', $filters['quarter']);
+            // Handle both "Q2" and "2" formats - database stores "Q1, Q2, Q3, Q4"
+            $quarterValue = $filters['quarter'];
+            if (strpos($quarterValue, 'Q') === 0) {
+                $quarterValue = substr($quarterValue, 1); // Remove 'Q' prefix if present
+            }
+            // Convert back to database format (add 'Q' prefix)
+            $dbQuarterValue = 'Q' . $quarterValue;
+            \Log::info('Applying quarter filter: ' . $dbQuarterValue);
+            $expiredChecklistResponses->whereHas('inspectionResult.inspection', function($q) use ($dbQuarterValue) {
+                $q->where('quarter', $dbQuarterValue);
             });
         }
         if (!empty($filters['year'])) {
@@ -529,7 +552,8 @@ class ReportsController extends Controller
         foreach ($expiredChecklistResponses as $response) {
             $inspectionDate = $response->inspectionResult->inspection->inspection_timestamp;
             $establishmentName = $response->inspectionResult->establishment->name ?? 'Unknown';
-            \Log::info("Found - Date: {$inspectionDate}, Establishment: {$establishmentName}");
+            $quarter = $response->inspectionResult->inspection->quarter ?? 'N/A';
+            \Log::info("Found - Date: {$inspectionDate}, Quarter: {$quarter}, Establishment: {$establishmentName}");
         }
 
         // Get ConditionalFieldResponse records related to expired checklist responses
@@ -556,8 +580,15 @@ class ReportsController extends Controller
             });
         }
         if (!empty($filters['quarter'])) {
-            $conditionalFieldResponses->whereHas('inspectionResult.inspection', function($q) use ($filters) {
-                $q->where('quarter', $filters['quarter']);
+            // Handle both "Q2" and "2" formats - database stores "Q1, Q2, Q3, Q4"
+            $quarterValue = $filters['quarter'];
+            if (strpos($quarterValue, 'Q') === 0) {
+                $quarterValue = substr($quarterValue, 1); // Remove 'Q' prefix if present
+            }
+            // Convert back to database format (add 'Q' prefix)
+            $dbQuarterValue = 'Q' . $quarterValue;
+            $conditionalFieldResponses->whereHas('inspectionResult.inspection', function($q) use ($dbQuarterValue) {
+                $q->where('quarter', $dbQuarterValue);
             });
         }
         if (!empty($filters['year'])) {
@@ -1757,6 +1788,179 @@ class ReportsController extends Controller
     }
 
     /**
+     * Get detailed responses for a specific question
+     */
+    public function getQuestionDetails(Request $request, $questionId)
+    {
+        $filters = $request->only(['date_from', 'date_to', 'quarter', 'year', 'establishment_id', 'category_id']);
+        
+        $query = InspectionChecklistResponse::with([
+            'inspectionResult.inspection', 
+            'inspectionResult.establishment.businessType',
+            'checklistQuestion.inspectionCategory'
+        ])->where('checklist_question_id', $questionId);
+
+        // Apply same filters as getChecklistResponseData
+        if (!empty($filters['date_from'])) {
+            $query->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereDate('inspection_timestamp', '>=', $filters['date_from']);
+            });
+        }
+        if (!empty($filters['date_to'])) {
+            $query->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereDate('inspection_timestamp', '<=', $filters['date_to']);
+            });
+        }
+        if (!empty($filters['quarter'])) {
+            $query->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->where('quarter', $filters['quarter']);
+            });
+        }
+        if (!empty($filters['year'])) {
+            $query->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereYear('inspection_timestamp', $filters['year']);
+            });
+        }
+        if (!empty($filters['establishment_id'])) {
+            $query->whereHas('inspectionResult', function($q) use ($filters) {
+                $q->where('establishment_id', $filters['establishment_id']);
+            });
+        }
+        if (!empty($filters['category_id'])) {
+            $query->whereHas('checklistQuestion', function($q) use ($filters) {
+                $q->where('category_id', $filters['category_id']);
+            });
+        }
+
+        $responses = $query->get();
+        
+        // Get conditional field responses for this question
+        $conditionalQuery = ConditionalFieldResponse::with([
+            'inspectionResult.inspection',
+            'inspectionResult.establishment.businessType',
+            'checklistQuestion.inspectionCategory'
+        ])->where('checklist_question_id', $questionId);
+
+        // Apply same filters to conditional responses
+        if (!empty($filters['date_from'])) {
+            $conditionalQuery->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereDate('inspection_timestamp', '>=', $filters['date_from']);
+            });
+        }
+        if (!empty($filters['date_to'])) {
+            $conditionalQuery->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereDate('inspection_timestamp', '<=', $filters['date_to']);
+            });
+        }
+        if (!empty($filters['quarter'])) {
+            $conditionalQuery->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->where('quarter', $filters['quarter']);
+            });
+        }
+        if (!empty($filters['year'])) {
+            $conditionalQuery->whereHas('inspectionResult.inspection', function($q) use ($filters) {
+                $q->whereYear('inspection_timestamp', $filters['year']);
+            });
+        }
+        if (!empty($filters['establishment_id'])) {
+            $conditionalQuery->whereHas('inspectionResult', function($q) use ($filters) {
+                $q->where('establishment_id', $filters['establishment_id']);
+            });
+        }
+        if (!empty($filters['category_id'])) {
+            $conditionalQuery->whereHas('checklistQuestion', function($q) use ($filters) {
+                $q->where('category_id', $filters['category_id']);
+            });
+        }
+
+        $conditionalResponses = $conditionalQuery->get();
+
+        // Separate responses by type
+        $positiveResponses = [];
+        $negativeResponses = [];
+        $naResponses = [];
+        $conditionalFields = [];
+        
+        foreach ($responses as $response) {
+            $responseType = $this->classifyResponse($response->response);
+            
+            $responseData = [
+                'establishment_name' => $response->inspectionResult->establishment->name ?? 'N/A',
+                'business_type' => $response->inspectionResult->establishment->businessType->name ?? 'N/A',
+                'response' => $response->response,
+                'response_date' => $response->inspectionResult->inspection->inspection_timestamp,
+                'inspector' => $response->inspectionResult->staff 
+                    ? ($response->inspectionResult->staff->first_name . ' ' . $response->inspectionResult->staff->last_name)
+                    : 'N/A',
+                'notes' => $response->notes,
+                'remarks' => $response->remarks
+            ];
+            
+            switch ($responseType) {
+                case 'positive':
+                    $positiveResponses[] = $responseData;
+                    break;
+                case 'negative':
+                    $negativeResponses[] = $responseData;
+                    break;
+                case 'na':
+                    $naResponses[] = $responseData;
+                    break;
+            }
+        }
+        
+        // Process conditional field responses
+        foreach ($conditionalResponses as $conditional) {
+            $conditionalFields[] = [
+                'establishment_name' => $conditional->inspectionResult->establishment->name ?? 'N/A',
+                'business_type' => $conditional->inspectionResult->establishment->businessType->name ?? 'N/A',
+                'field_name' => $conditional->field_name,
+                'field_value' => $conditional->field_value,
+                'response_date' => $conditional->inspectionResult->inspection->inspection_timestamp,
+                'inspector' => $conditional->inspectionResult->staff
+                    ? ($conditional->inspectionResult->staff->first_name . ' ' . $conditional->inspectionResult->staff->last_name)
+                    : 'N/A',
+                'is_expired' => $this->isConditionalFieldExpired($conditional->field_value, $conditional->inspectionResult->inspection->inspection_timestamp)
+            ];
+        }
+
+        return response()->json([
+            'positive' => $positiveResponses,
+            'negative' => $negativeResponses,
+            'na' => $naResponses,
+            'conditional_fields' => $conditionalFields
+        ]);
+    }
+
+    /**
+     * Check if conditional field is expired
+     */
+    private function isConditionalFieldExpired($fieldValue, $inspectionDate)
+    {
+        \Log::info("Checking expiration - Field: {$fieldValue}, Inspection: {$inspectionDate}");
+        
+        if (empty($fieldValue) || $fieldValue === 'N/A') {
+            \Log::info("Field is empty or N/A, returning null");
+            return null; // Not applicable
+        }
+
+        try {
+            $expiryDate = \Carbon\Carbon::parse($fieldValue);
+            $inspectionDate = \Carbon\Carbon::parse($inspectionDate);
+            
+            \Log::info("Parsed dates - Expiry: {$expiryDate}, Inspection: {$inspectionDate}");
+            
+            $isExpired = $expiryDate->lt($inspectionDate);
+            \Log::info("Is expired: " . ($isExpired ? 'true' : 'false'));
+            
+            return $isExpired;
+        } catch (\Exception $e) {
+            \Log::info("Date parsing failed: " . $e->getMessage());
+            return null; // Not a date field
+        }
+    }
+
+    /**
      * Classify response type.
      */
     private function classifyResponse($response)
@@ -1780,5 +1984,65 @@ class ReportsController extends Controller
         // Default to neutral if unclear
         \Log::info('Classified as NEUTRAL: ' . $response);
         return 'neutral';
+    }
+
+    /**
+     * Get establishments for filter dropdown
+     */
+    public function getEstablishmentsForFilters()
+    {
+        \Log::info('Fetching establishments for filters...');
+        
+        $establishments = Establishment::select('id', 'name')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        \Log::info('Found establishments: ' . $establishments->count());
+        \Log::info('Establishments data: ' . $establishments->toJson());
+
+        return response()->json($establishments);
+    }
+
+    /**
+     * Get categories for filter dropdown
+     */
+    public function getCategoriesForFilters()
+    {
+        \Log::info('Fetching categories for filters...');
+        
+        $categories = \App\Models\InspectionCategory::select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        \Log::info('Found categories: ' . $categories->count());
+        \Log::info('Categories data: ' . $categories->toJson());
+
+        return response()->json($categories);
+    }
+
+    /**
+     * Get questions for filter dropdown
+     */
+    public function getQuestionsForFilters()
+    {
+        \Log::info('Fetching questions for filters...');
+        
+        $questions = ChecklistQuestion::with('inspectionCategory:id,name')
+            ->select('id', 'question', 'category_id')
+            ->orderBy('question')
+            ->get()
+            ->map(function ($question) {
+                return [
+                    'id' => $question->id,
+                    'text' => $question->question,
+                    'category' => $question->inspectionCategory->name ?? 'Uncategorized'
+                ];
+            });
+
+        \Log::info('Found questions: ' . $questions->count());
+        \Log::info('Questions data: ' . $questions->toJson());
+
+        return response()->json($questions);
     }
 }

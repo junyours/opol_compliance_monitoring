@@ -1,0 +1,934 @@
+import React, { useState, useEffect } from 'react';
+import { Head, Link } from '@inertiajs/react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { ChartBarIcon, ExclamationTriangleIcon, CheckCircleIcon, ClockIcon, DocumentArrowDownIcon, ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, XMarkIcon, FunnelIcon, EyeIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
+
+export default function NoticeToComply({ auth }) {
+    const [establishments, setEstablishments] = useState([]);
+    const [allResponses, setAllResponses] = useState([]);
+    const [summary, setSummary] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [pagination, setPagination] = useState({
+        current_page: 1,
+        last_page: 1,
+        per_page: 10,
+        total: 0,
+        from: null,
+        to: null
+    });
+    const [filters, setFilters] = useState({
+        status: '',
+        date_from: '',
+        date_to: '',
+        establishment_id: '',
+        question_id: '',
+        page: 1,
+        per_page: 10
+    });
+    const [establishmentOptions, setEstablishmentOptions] = useState([]);
+    const [establishmentSearch, setEstablishmentSearch] = useState('');
+    const [showEstablishmentDropdown, setShowEstablishmentDropdown] = useState(false);
+    const [questionOptions, setQuestionOptions] = useState([]);
+    const [questionSearch, setQuestionSearch] = useState('');
+    const [showQuestionDropdown, setShowQuestionDropdown] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedEstablishment, setSelectedEstablishment] = useState(null);
+    const [showComplianceModal, setShowComplianceModal] = useState(false);
+    const [selectedResponse, setSelectedResponse] = useState(null);
+    const [complianceNotes, setComplianceNotes] = useState('');
+
+    useEffect(() => {
+        fetchData();
+        fetchEstablishmentOptions();
+        fetchQuestionOptions();
+    }, [filters]);
+
+    useEffect(() => {
+        // Initialize establishment search when filters change
+        if (filters.establishment_id && establishmentOptions.length > 0) {
+            const selected = establishmentOptions.find(est => est.id == filters.establishment_id);
+            if (selected) {
+                setEstablishmentSearch(selected.name);
+            }
+        } else if (!filters.establishment_id) {
+            setEstablishmentSearch('');
+        }
+    }, [filters.establishment_id, establishmentOptions]);
+
+    useEffect(() => {
+        // Close dropdown when clicking outside
+        const handleClickOutside = (event) => {
+            if (showEstablishmentDropdown && !event.target.closest('.relative')) {
+                setShowEstablishmentDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showEstablishmentDropdown]);
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const params = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value) params.append(key, value);
+            });
+
+            console.log('Fetching data with filters:', filters);
+            const response = await fetch(`/admin/notice-to-comply/data?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            console.log('Received data:', data);
+            console.log('Establishments count:', data.establishments?.data?.length || 0);
+            
+            setEstablishments(data.establishments?.data || []);
+            setAllResponses(data.all_responses || []);
+            setSummary(data.summary || {});
+            setPagination(data.establishments?.pagination || {
+                current_page: 1,
+                last_page: 1,
+                per_page: 10,
+                total: 0,
+                from: null,
+                to: null
+            });
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            if (error.message.includes('Unexpected token')) {
+                console.error('Server returned HTML instead of JSON - likely a 500 error');
+                alert('Server error: Please check the logs or try refreshing the page.');
+            } else {
+                console.error('Fetch error:', error.message);
+                alert('Error loading data: ' + error.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchEstablishmentOptions = async () => {
+        try {
+            const response = await fetch('/admin/notice-to-comply/establishments');
+            const data = await response.json();
+            setEstablishmentOptions(data);
+        } catch (error) {
+            console.error('Error fetching establishments:', error);
+        }
+    };
+
+    const fetchQuestionOptions = async () => {
+        try {
+            const response = await fetch('/admin/notice-to-comply/questions');
+            const data = await response.json();
+            setQuestionOptions(data);
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+        }
+    };
+
+    const handleFilterChange = (key, value) => {
+        setFilters(prev => {
+            const newFilters = { ...prev, [key]: value };
+            // Reset to page 1 when filters change (except for page changes)
+            if (key !== 'page' && key !== 'per_page') {
+                newFilters.page = 1;
+            }
+            return newFilters;
+        });
+    };
+
+    const handlePageChange = (page) => {
+        handleFilterChange('page', page);
+    };
+
+    const handlePerPageChange = (perPage) => {
+        setFilters(prev => ({ ...prev, per_page: perPage, page: 1 }));
+    };
+
+    const handleEstablishmentSearch = (searchTerm) => {
+        setEstablishmentSearch(searchTerm);
+        setShowEstablishmentDropdown(true);
+    };
+
+    const handleEstablishmentSelect = (establishment) => {
+        setFilters(prev => ({ ...prev, establishment_id: establishment.id }));
+        setEstablishmentSearch(establishment.name);
+        setShowEstablishmentDropdown(false);
+    };
+
+    const handleEstablishmentClear = () => {
+        setFilters(prev => ({ ...prev, establishment_id: '' }));
+        setEstablishmentSearch('');
+        setShowEstablishmentDropdown(false);
+    };
+
+    const handleQuestionSearch = (searchTerm) => {
+        setQuestionSearch(searchTerm);
+        setShowQuestionDropdown(true);
+    };
+
+    const handleQuestionSelect = (question) => {
+        setFilters(prev => ({ ...prev, question_id: question.id }));
+        setQuestionSearch(question.question);
+        setShowQuestionDropdown(false);
+    };
+
+    const handleQuestionClear = () => {
+        setFilters(prev => ({ ...prev, question_id: '' }));
+        setQuestionSearch('');
+        setShowQuestionDropdown(false);
+    };
+
+    const filteredEstablishmentOptions = establishmentOptions.filter(est =>
+        est.name.toLowerCase().includes(establishmentSearch.toLowerCase())
+    );
+
+    const filteredQuestionOptions = questionOptions.filter(q =>
+        q.question.toLowerCase().includes(questionSearch.toLowerCase())
+    );
+
+    useEffect(() => {
+        // Initialize question search when filters change
+        if (filters.question_id && questionOptions.length > 0) {
+            const selected = questionOptions.find(q => q.id == filters.question_id);
+            if (selected) {
+                setQuestionSearch(selected.question);
+            }
+        } else if (!filters.question_id) {
+            setQuestionSearch('');
+        }
+    }, [filters.question_id, questionOptions]);
+
+
+    const handleMarkAsComplied = async () => {
+        if (!selectedResponse) return;
+
+        try {
+            const response = await fetch(`/admin/notice-to-comply/${selectedResponse.id}/comply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    compliance_notes: complianceNotes
+                })
+            });
+
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                setShowComplianceModal(false);
+                setSelectedResponse(null);
+                setComplianceNotes('');
+                // Only refetch data without changing filters
+                const currentFilters = { ...filters };
+                fetchDataWithFilters(currentFilters);
+            } else {
+                console.error('Compliance marking failed:', data.message);
+                alert('Error: ' + (data.message || 'Failed to mark as complied'));
+            }
+        } catch (error) {
+            console.error('Error marking as complied:', error);
+            alert('Network error: Failed to mark as complied. Please try again.');
+        }
+    };
+
+    const fetchDataWithFilters = async (currentFilters) => {
+        try {
+            setLoading(true);
+            const params = new URLSearchParams();
+            Object.entries(currentFilters).forEach(([key, value]) => {
+                if (value) params.append(key, value);
+            });
+
+            console.log('Fetching data with filters:', currentFilters);
+            const response = await fetch(`/admin/notice-to-comply/data?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            console.log('Received data:', data);
+            console.log('Establishments count:', data.establishments?.data?.length || 0);
+            
+            setEstablishments(data.establishments?.data || []);
+            setAllResponses(data.all_responses || []);
+            setSummary(data.summary || {});
+            setPagination(data.establishments?.pagination || {
+                current_page: 1,
+                last_page: 1,
+                per_page: 10,
+                total: 0,
+                from: null,
+                to: null
+            });
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            if (error.message.includes('Unexpected token')) {
+                console.error('Server returned HTML instead of JSON - likely a 500 error');
+                alert('Server error: Please check the logs or try refreshing the page.');
+            } else {
+                console.error('Fetch error:', error.message);
+                alert('Error loading data: ' + error.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const openComplianceModal = (response) => {
+        setSelectedResponse(response);
+        setComplianceNotes(response.compliance_notes || '');
+        setShowComplianceModal(true);
+    };
+
+    const exportData = async () => {
+        try {
+            const params = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value) params.append(key, value);
+            });
+
+            // Use the new Excel export endpoint
+            window.open(`/admin/notice-to-comply/excel?${params}`, '_blank');
+        } catch (error) {
+            console.error('Error exporting data:', error);
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'complied': return 'text-green-600 bg-green-50';
+            case 'overdue': return 'text-red-600 bg-red-50';
+            case 'pending': return 'text-yellow-600 bg-yellow-50';
+            default: return 'text-gray-600 bg-gray-50';
+        }
+    };
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'complied': return <CheckCircleIcon className="w-4 h-4" />;
+            case 'overdue': return <ExclamationTriangleIcon className="w-4 h-4" />;
+            case 'pending': return <ClockIcon className="w-4 h-4" />;
+            default: return null;
+        }
+    };
+
+    return (
+        <AuthenticatedLayout user={auth}>
+            <Head title="Notice to Comply" />
+
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Header Section */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 mb-8">
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white flex items-center">
+                                        <ExclamationTriangleIcon className="w-8 h-8 mr-3" />
+                                        Notice to Comply Monitoring
+                                    </h1>
+                                    <p className="mt-2 text-blue-100">
+                                        Track establishments that need to comply within 3 days after inspection
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={exportData}
+                                    className="flex items-center px-6 py-3 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-200 shadow-lg font-medium transform hover:scale-105"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
+                                    Export to Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Summary Cards */}
+                        <div className="px-8 py-6 bg-gray-50 dark:bg-gray-900/50">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 hover:shadow-lg transition-shadow duration-300 transform hover:scale-105">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Establishments</p>
+                                            <p className="text-3xl font-bold text-blue-900 dark:text-blue-300 mt-1">{summary.total_establishments || 0}</p>
+                                        </div>
+                                        <div className="bg-blue-200 dark:bg-blue-800 p-3 rounded-lg">
+                                            <ChartBarIcon className="w-6 h-6 text-blue-700 dark:text-blue-300" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-br from-yellow-50 to-amber-100 dark:from-yellow-900/20 dark:to-amber-800/20 p-6 rounded-xl border border-yellow-200 dark:border-yellow-800 hover:shadow-lg transition-shadow duration-300 transform hover:scale-105">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</p>
+                                            <p className="text-3xl font-bold text-yellow-900 dark:text-yellow-300 mt-1">{summary.total_pending || 0}</p>
+                                        </div>
+                                        <div className="bg-yellow-200 dark:bg-yellow-800 p-3 rounded-lg">
+                                            <ClockIcon className="w-6 h-6 text-yellow-700 dark:text-yellow-300" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 p-6 rounded-xl border border-red-200 dark:border-red-800 hover:shadow-lg transition-shadow duration-300 transform hover:scale-105">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-red-600 dark:text-red-400">Overdue</p>
+                                            <p className="text-3xl font-bold text-red-900 dark:text-red-300 mt-1">{summary.total_overdue || 0}</p>
+                                        </div>
+                                        <div className="bg-red-200 dark:bg-red-800 p-3 rounded-lg">
+                                            <ExclamationTriangleIcon className="w-6 h-6 text-red-700 dark:text-red-300" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 p-6 rounded-xl border border-green-200 dark:border-green-800 hover:shadow-lg transition-shadow duration-300 transform hover:scale-105">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-green-600 dark:text-green-400">Complied</p>
+                                            <p className="text-3xl font-bold text-green-900 dark:text-green-300 mt-1">{summary.total_complied || 0}</p>
+                                        </div>
+                                        <div className="bg-green-200 dark:bg-green-800 p-3 rounded-lg">
+                                            <CheckCircleIcon className="w-6 h-6 text-green-700 dark:text-green-300" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Filters Section */}
+                        <div className="px-8 py-6 border-t border-gray-200 dark:border-gray-700 overflow-visible">
+                            <div className="flex items-center mb-4">
+                                <FunnelIcon className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-2" />
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 overflow-visible">
+                                <div className="relative">
+                                    <select
+                                        value={filters.status}
+                                        onChange={(e) => handleFilterChange('status', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer"
+                                    >
+                                        <option value="">All Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="overdue">Overdue</option>
+                                        <option value="complied">Complied</option>
+                                    </select>
+                                    <ChevronDownIcon className="absolute right-3 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" />
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="date"
+                                        value={filters.date_from}
+                                        onChange={(e) => handleFilterChange('date_from', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="date"
+                                        value={filters.date_to}
+                                        onChange={(e) => handleFilterChange('date_to', e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                    />
+                                </div>
+                                <div className="relative overflow-visible">
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={establishmentSearch}
+                                            onChange={(e) => handleEstablishmentSearch(e.target.value)}
+                                            onFocus={() => setShowEstablishmentDropdown(true)}
+                                            placeholder="Search establishment..."
+                                            className="w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                        />
+                                        {establishmentSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={handleEstablishmentClear}
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                                            >
+                                                <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {showEstablishmentDropdown && (
+                                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-auto animate-fade-in">
+                                            {filteredEstablishmentOptions.length > 0 ? (
+                                                filteredEstablishmentOptions.map(est => (
+                                                    <button
+                                                        key={est.id}
+                                                        type="button"
+                                                        onClick={() => handleEstablishmentSelect(est)}
+                                                        className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-600 focus:bg-gray-100 dark:focus:bg-gray-600 focus:outline-none transition-colors duration-150 text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                                                    >
+                                                        {est.name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                                                    No establishments found
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="relative overflow-visible">
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={questionSearch}
+                                            onChange={(e) => handleQuestionSearch(e.target.value)}
+                                            onFocus={() => setShowQuestionDropdown(true)}
+                                            placeholder="Search question..."
+                                            className="w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                        />
+                                        {questionSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={handleQuestionClear}
+                                                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                                            >
+                                                <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {showQuestionDropdown && (
+                                        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-auto animate-fade-in">
+                                            {filteredQuestionOptions.length > 0 ? (
+                                                filteredQuestionOptions.map(q => (
+                                                    <button
+                                                        key={q.id}
+                                                        type="button"
+                                                        onClick={() => handleQuestionSelect(q)}
+                                                        className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-600 focus:bg-gray-100 dark:focus:bg-gray-600 focus:outline-none transition-colors duration-150 text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                                                    >
+                                                        <div className="font-medium text-sm">{q.question}</div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{q.category}</div>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                                                    No questions found
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Data Table Section */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-16">
+                                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                <p className="mt-4 text-gray-600 dark:text-gray-400 font-medium">Loading compliance data...</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
+                                            <tr>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Establishment
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Business Type
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Issues
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Status
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Deadline
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {establishments.map((establishment, index) => (
+                                                <React.Fragment key={establishment.establishment_id}>
+                                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div>
+                                                                <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                                    {establishment.establishment_name}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center mt-1">
+                                                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                    </svg>
+                                                                    {establishment.address}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                                                                {establishment.business_type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(establishment.pending_count > 0 || establishment.overdue_count > 0) && (
+                                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                                                        <ClockIcon className="w-3 h-3 mr-1" />
+                                                                        Lacking Requirements
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            {establishment.overdue_count > 0 ? (
+                                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                                                    <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                                                                    Overdue
+                                                                </span>
+                                                            ) : establishment.pending_count > 0 ? (
+                                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                                                    <ClockIcon className="w-3 h-3 mr-1" />
+                                                                    Ongoing
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                                                    <CheckCircleIcon className="w-3 h-3 mr-1" />
+                                                                    Compliant
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                                {establishment.most_urgent_deadline || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedEstablishment(establishment);
+                                                                    setShowDetailsModal(true);
+                                                                }}
+                                                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-sm transform hover:scale-105"
+                                                            >
+                                                                <EyeIcon className="w-4 h-4 mr-1" />
+                                                                View Details
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </React.Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {establishments.length === 0 && !loading && (
+                                        <div className="text-center py-16">
+                                            <div className="flex flex-col items-center">
+                                                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                                                    <ChartBarIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                                                </div>
+                                                <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No compliance data found</p>
+                                                <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Try adjusting your filters or check back later</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Pagination */}
+                                <div className="flex items-center justify-between px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                                        Showing <span className="font-medium">{pagination.from || 0}</span> to <span className="font-medium">{pagination.to || 0}</span> of <span className="font-medium">{pagination.total}</span> results
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <select
+                                            value={pagination.per_page}
+                                            onChange={(e) => handlePerPageChange(parseInt(e.target.value))}
+                                            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        >
+                                            <option value={5}>5 per page</option>
+                                            <option value={10}>10 per page</option>
+                                            <option value={25}>25 per page</option>
+                                            <option value={50}>50 per page</option>
+                                        </select>
+                                        <div className="flex items-center space-x-1">
+                                            <button
+                                                onClick={() => handlePageChange(pagination.current_page - 1)}
+                                                disabled={pagination.current_page <= 1}
+                                                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 transform hover:scale-105"
+                                            >
+                                                Previous
+                                            </button>
+                                            <span className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                                Page {pagination.current_page} of {pagination.last_page}
+                                            </span>
+                                            <button
+                                                onClick={() => handlePageChange(pagination.current_page + 1)}
+                                                disabled={pagination.current_page >= pagination.last_page}
+                                                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 transform hover:scale-105"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Enhanced Compliance Modal */}
+            {showComplianceModal && selectedResponse && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-gray-700 transform transition-all duration-300">
+                        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 rounded-t-2xl">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <CheckCircleIcon className="w-6 h-6 text-white mr-2" />
+                                    <h3 className="text-xl font-bold text-white">Mark as Complied</h3>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowComplianceModal(false);
+                                        setSelectedResponse(null);
+                                        setComplianceNotes('');
+                                    }}
+                                    className="text-white hover:text-green-100 transition-colors duration-200"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <div className="space-y-4 mb-6">
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                        <span className="font-semibold text-gray-900 dark:text-white">Establishment:</span>
+                                    </p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{selectedResponse.establishment_name}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                        <span className="font-semibold text-gray-900 dark:text-white">Issue:</span>
+                                    </p>
+                                    <p className="text-gray-900 dark:text-white">{selectedResponse.question}</p>
+                                </div>
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Compliance Notes
+                                </label>
+                                <textarea
+                                    value={complianceNotes}
+                                    onChange={(e) => setComplianceNotes(e.target.value)}
+                                    rows={4}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none"
+                                    placeholder="Enter compliance details, actions taken, or additional notes..."
+                                />
+                            </div>
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    onClick={() => {
+                                        setShowComplianceModal(false);
+                                        setSelectedResponse(null);
+                                        setComplianceNotes('');
+                                    }}
+                                    className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-200 font-medium transform hover:scale-105"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleMarkAsComplied}
+                                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 font-medium shadow-sm transform hover:scale-105"
+                                >
+                                    Mark as Complied
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Details Modal */}
+            {showDetailsModal && selectedEstablishment && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6 rounded-t-2xl">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                                        <BuildingOfficeIcon className="w-6 h-6 mr-3 text-blue-600" />
+                                        {selectedEstablishment.establishment_name}
+                                    </h2>
+                                    <p className="mt-1 text-gray-600 dark:text-gray-400">
+                                        Compliance Issues Details
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowDetailsModal(false);
+                                        setSelectedEstablishment(null);
+                                    }}
+                                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="px-8 py-6">
+                            {/* Establishment Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                        <span className="font-semibold text-gray-900 dark:text-white">Business Type:</span>
+                                    </p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{selectedEstablishment.business_type}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                        <span className="font-semibold text-gray-900 dark:text-white">Address:</span>
+                                    </p>
+                                    <p className="text-gray-900 dark:text-white font-medium">{selectedEstablishment.address}</p>
+                                </div>
+                            </div>
+
+                            {/* Issues Summary */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</p>
+                                            <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-300">{selectedEstablishment.pending_count}</p>
+                                        </div>
+                                        <ClockIcon className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                                    </div>
+                                </div>
+                                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-red-600 dark:text-red-400">Overdue</p>
+                                            <p className="text-2xl font-bold text-red-900 dark:text-red-300">{selectedEstablishment.overdue_count}</p>
+                                        </div>
+                                        <ExclamationTriangleIcon className="w-8 h-8 text-red-600 dark:text-red-400" />
+                                    </div>
+                                </div>
+                                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-green-600 dark:text-green-400">Complied</p>
+                                            <p className="text-2xl font-bold text-green-900 dark:text-green-300">{selectedEstablishment.complied_count}</p>
+                                        </div>
+                                        <CheckCircleIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Detailed Issues */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                                    <ExclamationTriangleIcon className="w-5 h-5 mr-2 text-orange-500" />
+                                    Compliance Issues
+                                </h3>
+                                <div className="space-y-4">
+                                    {selectedEstablishment.issues.map((issue, issueIndex) => (
+                                        <div 
+                                            key={issueIndex}
+                                            className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow-md transition-shadow duration-200"
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-3 mb-3">
+                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(issue.status)}`}>
+                                                            {getStatusIcon(issue.status)}
+                                                            <span className="ml-1">{issue.status.charAt(0).toUpperCase() + issue.status.slice(1)}</span>
+                                                        </span>
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                                            {issue.category}
+                                                        </span>
+                                                    </div>
+                                                    <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                                                        {issue.question}
+                                                    </h5>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                                        <span className="font-medium">Response:</span> {issue.response}
+                                                    </p>
+                                                    {issue.notes && (
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                                            <span className="font-medium">Notes:</span> {issue.notes}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                                                        <span className="flex items-center">
+                                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                            </svg>
+                                                            Inspection: {issue.inspection_date}
+                                                        </span>
+                                                        <span className="flex items-center">
+                                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            Deadline: {issue.compliance_deadline}
+                                                        </span>
+                                                        {issue.days_remaining >= 0 && (
+                                                            <span className="flex items-center text-yellow-600 font-medium">
+                                                                <ClockIcon className="w-4 h-4 mr-1" />
+                                                                {issue.days_remaining} days remaining
+                                                            </span>
+                                                        )}
+                                                        {issue.days_overdue > 0 && (
+                                                            <span className="flex items-center text-red-600 font-medium">
+                                                                <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+                                                                {issue.days_overdue} days overdue
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end space-y-2">
+                                                    <div className="text-right">
+                                                        {issue.has_complied && (
+                                                            <span className="flex items-center text-green-600 font-medium">
+                                                                <CheckCircleIcon className="w-4 h-4 mr-1" />
+                                                                Complied: {issue.complied_at}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {!issue.has_complied && (
+                                                        <Link
+                                                            href={`/admin/inspection-results/${issue.inspection_result_id}`}
+                                                            className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors duration-200 shadow-sm transform hover:scale-105"
+                                                        >
+                                                            Mark as Complied
+                                                        </Link>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </AuthenticatedLayout>
+    );
+}

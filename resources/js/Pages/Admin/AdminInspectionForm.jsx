@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { useNotification } from '@/Components/ValidationSystem';
 import {
     BuildingOfficeIcon,
     ClipboardDocumentCheckIcon,
@@ -14,6 +15,13 @@ import {
 
 export default function AdminInspectionForm({ auth }) {
     const { establishments = [], staff = [], checklistQuestions = [], groupedQuestions = {}, utilities = [], categories = [], businessTypes = [], existingInspections = [] } = usePage().props;
+    
+    const {
+        showSuccess,
+        showError,
+        showLoading,
+        hideLoading
+    } = useNotification();
     
     // Debug: Log existing inspections data
     console.log('=== Component Loaded ===');
@@ -283,7 +291,7 @@ export default function AdminInspectionForm({ auth }) {
                 ...prev[questionId],
                 question_id: questionId,
                 response: response,
-                notes: prev[questionId]?.notes || '',
+                notes: response ? (prev[questionId]?.notes || '') : '', // Clear notes when response is cleared
                 remarks: prev[questionId]?.remarks || ''
             }
         }));
@@ -635,15 +643,34 @@ export default function AdminInspectionForm({ auth }) {
         console.log('Form data being submitted:', formData);
         console.log('Sending to: /admin/inspection-store');
         
+        // Show loading message
+        showLoading('Submitting inspection...', 'Please wait while we save your inspection data.');
+        
         router.post('/admin/inspection-store', formData, {
             onSuccess: (page) => {
                 console.log('Success response:', page);
+                hideLoading();
                 setShowConfirmationModal(false);
+                
+                // Show success message
+                showSuccess(
+                    'Inspection Submitted Successfully!',
+                    'The inspection has been recorded and saved successfully.'
+                );
+                
+                // Go back to previous page after a short delay
+                setTimeout(() => {
+                    router.visit('/admin/inspections');
+                }, 1500);
             },
             onError: (errors) => {
                 console.log('Error response:', errors);
-                alert('Error submitting form: ' + JSON.stringify(errors));
+                hideLoading();
                 setShowConfirmationModal(false);
+                
+                // Show user-friendly error message
+                const errorMessage = errors.message || 'There was an error submitting the inspection. Please try again.';
+                showError('Submission Failed', errorMessage);
             }
         });
     };
@@ -964,6 +991,7 @@ export default function AdminInspectionForm({ auth }) {
                                                                     {typeof option === 'string' ? option : option.text}
                                                                 </option>
                                                             ))}
+                                                            <option value="N/A">N/A</option>
                                                         </select>
 
                                                         {renderConditionalFields(question)}
@@ -987,16 +1015,20 @@ export default function AdminInspectionForm({ auth }) {
                                                         </div>
 
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-                                                                <textarea
-                                                                    value={checklistResponses[question.id]?.notes || ''}
-                                                                    onChange={(e) => handleNotesChange(question.id, e.target.value)}
-                                                                    rows={2}
-                                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                                    placeholder="Add notes..."
-                                                                />
-                                                            </div>
+                                                            {/* Only show Notes field when a response is selected */}
+                                                            {checklistResponses[question.id]?.response && (
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                                                                    <textarea
+                                                                        value={checklistResponses[question.id]?.notes || ''}
+                                                                        onChange={(e) => handleNotesChange(question.id, e.target.value)}
+                                                                        rows={2}
+                                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        placeholder="Notes cannot be edited..."
+                                                                        readOnly
+                                                                    />
+                                                                </div>
+                                                            )}
                                                             <div>
                                                                 <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
                                                                 <textarea

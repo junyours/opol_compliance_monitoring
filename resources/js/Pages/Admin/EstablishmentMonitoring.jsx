@@ -436,7 +436,9 @@ export default function EstablishmentMonitoring({ auth }) {
                                                                     </td>
                                                                     <td className="px-4 py-2 text-sm text-gray-600">
                                                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                                                            {establishment.business_type?.name || 'N/A'}
+                                                                            <div className="max-w-32 overflow-hidden text-ellipsis whitespace-nowrap" title={establishment.business_type?.name || 'N/A'}>
+                                                                                {establishment.business_type?.name || 'N/A'}
+                                                                            </div>
                                                                         </span>
                                                                     </td>
                                                                     <td className="px-4 py-2 text-sm text-gray-600">
@@ -514,7 +516,9 @@ export default function EstablishmentMonitoring({ auth }) {
                                                                     </td>
                                                                     <td className="px-4 py-2 text-sm text-gray-600">
                                                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                                                            {establishment.business_type?.name || 'N/A'}
+                                                                            <div className="max-w-32 overflow-hidden text-ellipsis whitespace-nowrap" title={establishment.business_type?.name || 'N/A'}>
+                                                                                {establishment.business_type?.name || 'N/A'}
+                                                                            </div>
                                                                         </span>
                                                                     </td>
                                                                     <td className="px-4 py-2 text-sm text-gray-600">

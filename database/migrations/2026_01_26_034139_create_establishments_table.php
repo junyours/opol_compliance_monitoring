@@ -10,16 +10,16 @@ return new class extends Migration
     {
         Schema::create('establishments', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('proponent');
-            $table->string('address');
-            $table->string('contact_number');
-            $table->string('email')->unique();
-            $table->foreignId('type_of_business_id')->constrained('business_types');
-            $table->string('Barangay');
-            $table->integer('total_capacity');
-            $table->integer('number_of_rooms');
-            $table->integer('number_of_employees');
+            $table->string('name')->nullable();
+            $table->string('proponent')->nullable();
+            $table->string('address')->nullable();
+            $table->string('contact_number')->nullable();
+            $table->string('email')->nullable()->unique();
+            $table->foreignId('type_of_business_id')->nullable()->constrained('business_types');
+            $table->string('Barangay')->nullable();
+            $table->integer('total_capacity')->nullable();
+            $table->integer('number_of_rooms')->nullable();
+            $table->integer('number_of_employees')->nullable();
              $table->enum('status', ['active', 'inactive', 'terminated'])->default('active');
             $table->timestamps();
         });

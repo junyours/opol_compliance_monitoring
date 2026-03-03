@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { Inertia } from '@inertiajs/inertia';
 import { Link } from '@inertiajs/react';
 import { useNotification } from '@/Components/ValidationSystem';
+import Pagination from '@/Components/Pagination';
 import {
     TagIcon,
     PlusIcon,
@@ -11,7 +12,8 @@ import {
     DocumentTextIcon,
     ListBulletIcon,
     PencilSquareIcon,
-    XMarkIcon
+    XMarkIcon,
+    MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 
 export default function Inspection({ auth }) {
@@ -19,6 +21,9 @@ export default function Inspection({ auth }) {
   const [newCategory, setNewCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState(null);
   const [editCategoryName, setEditCategoryName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const {
     showSuccess,
@@ -149,6 +154,22 @@ export default function Inspection({ auth }) {
 
   const toRoman = (num) => ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][num] || (num + 1);
 
+  const filteredCategories = (categories || []).filter(cat => 
+    cat.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Pagination logic
+  const totalItems = filteredCategories.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCategories = filteredCategories.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   return (
     <AuthenticatedLayout
       user={auth.user}
@@ -178,7 +199,7 @@ export default function Inspection({ auth }) {
         <div className="w-full space-y-6">
           {/* Header Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg">
                   <ListBulletIcon className="w-5 h-5 text-white" />
@@ -187,6 +208,26 @@ export default function Inspection({ auth }) {
                   <h3 className="text-lg font-bold text-gray-900">Categories</h3>
                   <p className="text-sm text-gray-500">Manage inspection categories and their order</p>
                 </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">{totalItems}</p>
+                  <p className="text-xs text-gray-500">Total Categories</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="mt-4">
+              <div className="relative max-w-md">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search categories..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                />
               </div>
             </div>
           </div>
@@ -214,12 +255,17 @@ export default function Inspection({ auth }) {
           {/* Categories List */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-              <h4 className="text-lg font-bold text-gray-900">Category List</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-bold text-gray-900">Category List</h4>
+                <div className="text-xs text-gray-600">
+                  {paginatedCategories.length} of {totalItems} categories
+                </div>
+              </div>
             </div>
             <div className="p-6">
-              {categories.length > 0 ? (
+              {paginatedCategories.length > 0 ? (
                 <ol className="space-y-3">
-                  {categories.map((cat, index) => (
+                  {paginatedCategories.map((cat, index) => (
                     <li
                       key={cat.id}
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-teal-300 hover:bg-teal-50 transition-all duration-200 group"
@@ -290,11 +336,24 @@ export default function Inspection({ auth }) {
                   <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
                     <TagIcon className="w-8 h-8 text-gray-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">No Categories Found</h3>
-                  <p className="text-sm text-gray-500">Create your first category to start organizing inspections.</p>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    {searchTerm ? 'No Categories Found' : 'No Categories Available'}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {searchTerm ? 'Try adjusting your search terms' : 'Create your first category to start organizing inspections.'}
+                  </p>
                 </div>
               )}
             </div>
+            
+            {/* Pagination */}
+            <Pagination 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              totalItems={totalItems}
+            />
           </div>
         </div>
       </div>

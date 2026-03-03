@@ -11,14 +11,15 @@ export default function StaffLayout({ auth, header, children }) {
     const upcomingCount = page.props.upcomingInspections?.length || 0;
 
     return (
-        <div className="h-screen flex overflow-hidden bg-gray-50">
+        <div className="min-h-screen flex bg-gray-50">
             <Head title="Staff Dashboard" />
 
             {/* Sidebar - handles both mobile and desktop */}
             <StaffSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} upcomingCount={upcomingCount} />
 
             {/* Main content area */}
-            <div className="flex flex-col w-0 flex-1 overflow-hidden">
+            <div className="flex flex-col w-0 flex-1">
+
                 {/* Topbar - Fixed */}
                 <StaffTopbar onMenuClick={() => setSidebarOpen(true)} />
 

@@ -20,6 +20,14 @@ import {
     FunnelIcon,
     CheckCircleIcon,
     ExclamationTriangleIcon,
+    SparklesIcon,
+    ShieldCheckIcon,
+    UserGroupIcon,
+    DocumentTextIcon,
+    ClockIcon,
+    ArrowPathIcon,
+    EyeIcon,
+    UserCircleIcon
 } from '@heroicons/react/24/outline';
 
 export default function CreateStaff({ auth }) {
@@ -107,6 +115,12 @@ export default function CreateStaff({ auth }) {
             return;
         }
 
+        // Validate password length for new staff
+        if (!editingStaff && formData.password && formData.password.length < 8) {
+            showError('Password Too Short', 'Password must be at least 8 characters long.');
+            return;
+        }
+
         // Check for duplicates
         const existingStaff = staffs?.data || [];
         const duplicateFields = ['email', 'phone'];
@@ -147,7 +161,7 @@ export default function CreateStaff({ auth }) {
 
         const errorCallback = (errors) => {
             hideLoading();
-            showError('Error', errors.message || 'Something went wrong. Please try again.');
+            handleStaffError(errors, editingStaff ? 'update staff member' : 'create staff member');
         };
 
         if (editingStaff) {
@@ -160,6 +174,45 @@ export default function CreateStaff({ auth }) {
                 onSuccess: successCallback,
                 onError: errorCallback
             });
+        }
+    };
+
+    const handleStaffError = (errors, action) => {
+        console.error(`${action} errors:`, errors);
+        
+        // If there are validation errors, show a user-friendly message
+        if (errors && typeof errors === 'object') {
+            const errorFields = Object.keys(errors);
+            if (errorFields.length > 0) {
+                // Check for common error types
+                if (errors.name) {
+                    showError('Validation Error', 'Full name is required and must be unique.');
+                } else if (errors.email) {
+                    showError('Validation Error', 'Please provide a valid and unique email address.');
+                } else if (errors.password) {
+                    showError('Validation Error', 'Password must be at least 8 characters long.');
+                } else if (errors.first_name) {
+                    showError('Validation Error', 'First name is required.');
+                } else if (errors.last_name) {
+                    showError('Validation Error', 'Last name is required.');
+                } else if (errors.phone) {
+                    showError('Validation Error', 'Please provide a valid phone number.');
+                } else if (errors.position) {
+                    showError('Validation Error', 'Position is required.');
+                } else if (errors.department) {
+                    showError('Validation Error', 'Department is required.');
+                } else {
+                    // Show a general validation error message
+                    const firstError = errors[errorFields[0]];
+                    showError('Validation Error', firstError || 'Please check all required fields.');
+                }
+            }
+        } else if (typeof errors === 'string') {
+            showError('Error', errors);
+        } else if (errors?.message) {
+            showError('Error', errors.message);
+        } else {
+            showError('Error', `Failed to ${action}. Please try again.`);
         }
     };
 
@@ -203,7 +256,7 @@ export default function CreateStaff({ auth }) {
             header={
                 <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                        <UserIcon className="w-8 h-8 text-blue-600 mr-3" />
+                        <UserGroupIcon className="w-8 h-8 text-blue-600 mr-3" />
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900">Staff Management</h2>
                             <p className="text-sm text-gray-600 mt-1">
@@ -220,22 +273,26 @@ export default function CreateStaff({ auth }) {
         >
             <Head title="Staff Management" />
             
-            <div className="p-6 bg-gray-50 min-h-screen">
+            <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 min-h-screen">
                 <div className="max-w-7xl mx-auto space-y-8">
-                    {/* Flash Messages */}
+                    {/* Enhanced Flash Messages */}
                     {flash?.success && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-2xl shadow-lg animate-fade-in">
                             <div className="flex items-center">
-                                <CheckCircleIcon className="w-5 h-5 text-green-600 mr-3" />
-                                <p className="text-green-800">{flash.success}</p>
+                                <div className="p-2 bg-green-500 rounded-full mr-3 animate-pulse">
+                                    <CheckCircleIcon className="w-5 h-5 text-white" />
+                                </div>
+                                <p className="text-green-800 dark:text-green-200 font-medium">{flash.success}</p>
                             </div>
                         </div>
                     )}
                     {flash?.error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="mb-6 p-4 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border border-red-200 dark:border-red-800 rounded-2xl shadow-lg animate-fade-in">
                             <div className="flex items-center">
-                                <ExclamationTriangleIcon className="w-5 h-5 text-red-600 mr-3" />
-                                <p className="text-red-800">{flash.error}</p>
+                                <div className="p-2 bg-red-500 rounded-full mr-3 animate-pulse">
+                                    <ExclamationTriangleIcon className="w-5 h-5 text-white" />
+                                </div>
+                                <p className="text-red-800 dark:text-red-200 font-medium">{flash.error}</p>
                             </div>
                         </div>
                     )}
@@ -251,10 +308,10 @@ export default function CreateStaff({ auth }) {
                             </div>
                             <button
                                 onClick={() => setShowForm(!showForm)}
-                                className={`inline-flex items-center px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                                className={`inline-flex items-center px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
                                     showForm 
                                         ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' 
-                                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                                        : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
                                 }`}
                             >
                                 {showForm ? (
@@ -293,7 +350,7 @@ export default function CreateStaff({ auth }) {
                                                 });
                                             }
                                         }}
-                                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                                                className="block w-full pl-12 pr-4 py-4 border border-gray-300 dark:border-gray-600 rounded-2xl leading-5 bg-white dark:bg-gray-700 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                                     />
                                 </div>
                             </div>
@@ -338,15 +395,25 @@ export default function CreateStaff({ auth }) {
 
                     {/* Form */}
                     {showForm && (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                                {editingStaff ? 'Edit Staff Member' : 'Add New Staff Member'}
-                            </h4>
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-8 hover:shadow-2xl transition-all duration-500">
+                            <div className="flex items-center space-x-3 mb-6">
+                                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
+                                    <UserCircleIcon className="w-5 h-5 text-white" />
+                                </div>
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {editingStaff ? 'Edit Staff Member' : 'Add New Staff Member'}
+                                </h4>
+                            </div>
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {/* Personal Information */}
                                     <div className="lg:col-span-3">
-                                        <h5 className="text-md font-semibold text-gray-700 mb-3">Personal Information</h5>
+                                        <div className="flex items-center space-x-2 mb-4">
+                                            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                                                <UserIcon className="w-4 h-4 text-white" />
+                                            </div>
+                                            <h5 className="text-lg font-bold text-gray-900 dark:text-white">Personal Information</h5>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">

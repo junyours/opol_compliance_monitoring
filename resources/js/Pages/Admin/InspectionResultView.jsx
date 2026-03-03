@@ -11,11 +11,19 @@ import {
     ClipboardDocumentCheckIcon,
     ArrowDownTrayIcon,
     PrinterIcon,
-    XMarkIcon
+    XMarkIcon,
+    DocumentTextIcon,
+    BanknotesIcon,
+    EyeIcon,
+    EyeSlashIcon,
+    EnvelopeIcon
 } from '@heroicons/react/24/outline';
 
 export default function InspectionResultView({ auth }) {
-    const { inspectionResult, groupedConditionalFields } = usePage().props;
+    const { inspectionResult, groupedConditionalFields, penalties: backendPenalties, previousUnpaidPenalties } = usePage().props;
+    
+    // Debug: Log previous unpaid penalties to verify data
+    console.log('Previous Unpaid Penalties:', previousUnpaidPenalties);
     const [activeTab, setActiveTab] = useState('checklist');
     const [isEditing, setIsEditing] = useState(false);
     const [editedResult, setEditedResult] = useState({
@@ -30,6 +38,161 @@ export default function InspectionResultView({ auth }) {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploadProgress, setUploadProgress] = useState({});
     const [selectedPhoto, setSelectedPhoto] = useState(null);
+    const [showPenaltiesSidebar, setShowPenaltiesSidebar] = useState(false);
+    const [penalties, setPenalties] = useState({
+        first_penalty: {
+            description: backendPenalties?.first_penalty?.description || '',
+            amount: backendPenalties?.first_penalty?.amount || '',
+            document: backendPenalties?.first_penalty?.document || null,
+            payment_status: backendPenalties?.first_penalty?.payment_status || 'pending',
+            paid_at: backendPenalties?.first_penalty?.paid_at || null
+        },
+        second_penalty: {
+            description: backendPenalties?.second_penalty?.description || '',
+            amount: backendPenalties?.second_penalty?.amount || '',
+            document: backendPenalties?.second_penalty?.document || null,
+            payment_status: backendPenalties?.second_penalty?.payment_status || 'pending',
+            paid_at: backendPenalties?.second_penalty?.paid_at || null
+        },
+        third_penalty: {
+            description: backendPenalties?.third_penalty?.description || '',
+            amount: backendPenalties?.third_penalty?.amount || '',
+            document: backendPenalties?.third_penalty?.document || null,
+            payment_status: backendPenalties?.third_penalty?.payment_status || 'pending',
+            paid_at: backendPenalties?.third_penalty?.paid_at || null
+        }
+    });
+    const [penaltyDocuments, setPenaltyDocuments] = useState({
+        first_penalty: null,
+        second_penalty: null,
+        third_penalty: null
+    });
+    const [expiredChecks, setExpiredChecks] = useState({});
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailData, setEmailData] = useState({
+        email: '',
+        subject: '',
+        message: ''
+    });
+    const [isSending, setIsSending] = useState(false);
+
+    // Function to get previous unpaid penalty for a specific penalty type
+    const getPreviousUnpaidPenalty = (penaltyType) => {
+        console.log(`Getting previous unpaid penalty for: ${penaltyType}`);
+        console.log('Available previous unpaid penalties:', previousUnpaidPenalties);
+        
+        if (!previousUnpaidPenalties || previousUnpaidPenalties.length === 0) {
+            console.log('No previous unpaid penalties found');
+            return null;
+        }
+
+        // Map current penalty types to previous penalty types that should be displayed
+        const mapping = {
+            'first_penalty': 'first_penalty', // Show previous first_penalty in first_penalty field
+            'second_penalty': 'second_penalty', // Show previous second_penalty in second_penalty field
+            'third_penalty': 'third_penalty'  // Show previous third_penalty in third_penalty field
+        };
+
+        const previousPenaltyType = mapping[penaltyType];
+        console.log(`Looking for penalty type: ${previousPenaltyType}`);
+        
+        if (!previousPenaltyType) {
+            console.log('No previous penalty type mapping found');
+            return null;
+        }
+
+        // Find the most recent unpaid penalty of the matching type
+        const foundPenalty = previousUnpaidPenalties.find(penalty => 
+            penalty.penalty_type === previousPenaltyType && penalty.status === 'unpaid'
+        ) || null;
+        
+        console.log(`Found penalty:`, foundPenalty);
+        return foundPenalty;
+    };
+
+    // Function to get display data for penalty field (combines current and previous)
+    const getPenaltyDisplayData = (penaltyType) => {
+        const currentPenalty = penalties[penaltyType];
+        const previousPenalty = getPreviousUnpaidPenalty(penaltyType);
+        
+        console.log(`=== getPenaltyDisplayData for ${penaltyType} ===`);
+        console.log('Current penalty:', currentPenalty);
+        console.log('Previous penalty:', previousPenalty);
+        
+        // If there's a previous unpaid penalty, display it with notes
+        if (previousPenalty) {
+            console.log('Using previous penalty data');
+            const displayData = {
+                description: previousPenalty.description || 'No description',
+                amount: previousPenalty.amount || 0,
+                status: previousPenalty.status,
+                isPrevious: true,
+                inspectionDate: previousPenalty.inspection ? 
+                    new Date(previousPenalty.inspection.inspection_timestamp).toLocaleDateString() : 
+                    'N/A',
+                document: previousPenalty.document_path ? {
+                    path: previousPenalty.document_path,
+                    name: previousPenalty.document_name,
+                    url: `/storage/${previousPenalty.document_path}`,
+                } : null,
+            };
+            console.log('Returning displayData:', displayData);
+            return displayData;
+        }
+        
+        console.log('Using current penalty data');
+        // Otherwise, display current penalty
+        const displayData = {
+            description: currentPenalty.description || '',
+            amount: currentPenalty.amount || 0,
+            status: currentPenalty.payment_status || 'pending',
+            isPrevious: false,
+            inspectionDate: null,
+            document: currentPenalty.document || null,
+        };
+        console.log('Returning displayData:', displayData);
+        return displayData;
+    };
+
+    // Helper functions to determine penalty input states
+    const isPenaltyDisabled = (penaltyType) => {
+        switch (penaltyType) {
+            case 'first_penalty':
+                return false; // First penalty is always enabled
+            case 'second_penalty':
+                return penalties.first_penalty.payment_status !== 'paid';
+            case 'third_penalty':
+                return penalties.second_penalty.payment_status !== 'paid';
+            default:
+                return false;
+        }
+    };
+
+    const getPenaltyStatusText = (penaltyType) => {
+        const penalty = penalties[penaltyType];
+        if (penalty.payment_status === 'paid') {
+            return `Paid on ${formatDate(penalty.paid_at)}`;
+        }
+        return 'Pending Payment';
+    };
+
+    const getPenaltyBadgeClass = (penaltyType) => {
+        const penalty = penalties[penaltyType];
+        return penalty.payment_status === 'paid' 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-yellow-100 text-yellow-800';
+    };
+
+    // Initialize expiredChecks based on existing notes
+    React.useEffect(() => {
+        const initialExpiredChecks = {};
+        inspectionResult.checklist_responses?.forEach(response => {
+            if (response.notes && response.notes.includes('Document/Permit has expired.')) {
+                initialExpiredChecks[response.id] = true;
+            }
+        });
+        setExpiredChecks(initialExpiredChecks);
+    }, [inspectionResult.checklist_responses]);
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -220,14 +383,72 @@ export default function InspectionResultView({ auth }) {
     };
 
     const handleResponseChange = (responseId, field, value) => {
-        setEditedResult(prev => ({
-            ...prev,
-            checklist_responses: prev.checklist_responses.map(response =>
+        setEditedResult(prev => {
+            const updatedChecklistResponses = prev.checklist_responses.map(response =>
                 response.id === responseId
                     ? { ...response, [field]: value }
                     : response
-            )
-        }));
+            );
+
+            // Check if this is a conditional question and handle field initialization
+            const response = updatedChecklistResponses.find(r => r.id === responseId);
+            const question = response?.checklist_question;
+            
+            if (question?.is_conditional && question?.conditional_logic && field === 'response') {
+                const shouldShowFields = value === question.conditional_logic.trigger_response;
+                
+                if (shouldShowFields) {
+                    // Initialize conditional fields if they don't exist
+                    const currentConditionalFields = prev.conditional_fields || {};
+                    if (!currentConditionalFields[question.id]) {
+                        const newFields = question.conditional_logic.fields.reduce((acc, field) => {
+                            acc[field.name] = '';
+                            return acc;
+                        }, {});
+                        
+                        return {
+                            ...prev,
+                            checklist_responses: updatedChecklistResponses,
+                            conditional_fields: {
+                                ...currentConditionalFields,
+                                [question.id]: newFields
+                            }
+                        };
+                    }
+                } else {
+                    // Remove conditional fields if response doesn't match trigger
+                    const currentConditionalFields = prev.conditional_fields || {};
+                    const newConditionalFields = { ...currentConditionalFields };
+                    delete newConditionalFields[question.id];
+                    
+                    // Also clear expired check for this question
+                    const newExpiredChecks = { ...expiredChecks };
+                    delete newExpiredChecks[responseId];
+                    setExpiredChecks(newExpiredChecks);
+                    
+                    // Clear expired notes from the response
+                    const updatedResponsesWithClearedNotes = updatedChecklistResponses.map(resp =>
+                        resp.id === responseId
+                            ? { 
+                                ...resp, 
+                                notes: resp.notes?.replace(/\n?Document\/Permit has expired\./, '').trim() || null
+                              }
+                            : resp
+                    );
+                    
+                    return {
+                        ...prev,
+                        checklist_responses: updatedResponsesWithClearedNotes,
+                        conditional_fields: newConditionalFields
+                    };
+                }
+            }
+
+            return {
+                ...prev,
+                checklist_responses: updatedChecklistResponses
+            };
+        });
     };
 
     const handleConditionalFieldChange = (questionId, fieldName, value) => {
@@ -243,15 +464,77 @@ export default function InspectionResultView({ auth }) {
         }));
     };
 
+    const handleClearNotes = (responseId) => {
+        setEditedResult(prev => {
+            const updated = {
+                ...prev,
+                checklist_responses: prev.checklist_responses.map(response =>
+                    response.id === responseId
+                        ? { ...response, notes: null }  // Explicitly set to null
+                        : response
+                )
+            };
+            return updated;
+        });
+    };
+
+    const handleExpiredCheck = (responseId, isExpired) => {
+        alert(`Expired checkbox changed: ${responseId}, isExpired: ${isExpired}`);
+        setExpiredChecks(prev => ({
+            ...prev,
+            [responseId]: isExpired
+        }));
+
+        // Update the notes field when expired checkbox changes
+        setEditedResult(prev => {
+            const currentResponse = prev.checklist_responses.find(r => r.id === responseId);
+            const currentNotes = currentResponse?.notes || '';
+            const existingExpiredNote = currentNotes.includes('Document/Permit has expired.');
+            
+            alert(`Current notes: "${currentNotes}"\nHas expired note: ${existingExpiredNote}`);
+            
+            let newNotes;
+            if (isExpired && !existingExpiredNote) {
+                newNotes = currentNotes ? `${currentNotes}\nDocument/Permit has expired.` : 'Document/Permit has expired.';
+            } else if (!isExpired && existingExpiredNote) {
+                newNotes = currentNotes.replace(/\n?Document\/Permit has expired\./, '').trim();
+            } else {
+                newNotes = currentNotes;
+            }
+            
+            alert(`New notes will be: "${newNotes}"`);
+            
+            const updated = {
+                ...prev,
+                checklist_responses: prev.checklist_responses.map(response =>
+                    response.id === responseId
+                        ? { ...response, notes: newNotes }
+                        : response
+                )
+            };
+            
+            const updatedResponse = updated.checklist_responses.find(r => r.id === responseId);
+            alert(`Updated response notes: "${updatedResponse.notes}"`);
+            return updated;
+        });
+    };
+
     const handleSaveChanges = () => {
+        // Include penalties data in the save request
+        const dataToSave = {
+            ...editedResult,
+            penalties: penalties
+        };
+        
         // Save changes via API
-        router.put(`/admin/inspection-results/${inspectionResult.id}`, editedResult, {
-            onSuccess: () => {
+        router.put(`/admin/inspection-results/${inspectionResult.id}`, dataToSave, {
+            onSuccess: (response) => {
                 setIsEditing(false);
-                // Optionally show success message
+                // Reload the page to get updated data
+                window.location.reload();
             },
             onError: (errors) => {
-                console.error('Error saving changes:', errors);
+                alert('Error saving changes: ' + JSON.stringify(errors));
             }
         });
     };
@@ -326,6 +609,96 @@ export default function InspectionResultView({ auth }) {
         }
     };
 
+    const handleSendEmail = async () => {
+        setIsSending(true);
+        
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+                        || document.querySelector('input[name="_token"]')?.value
+                        || '';
+
+            const response = await fetch(`/admin/inspection-results/${inspectionResult.id}/email-pdf`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(emailData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                setShowEmailModal(false);
+                setEmailData({ email: '', subject: '', message: '' });
+                alert('PDF successfully sent to ' + emailData.email);
+            } else {
+                alert('Error: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Email error:', error);
+            alert('Failed to send email: ' + error.message);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handlePenaltyChange = (penaltyType, field, value) => {
+        setPenalties(prev => ({
+            ...prev,
+            [penaltyType]: {
+                ...prev[penaltyType],
+                [field]: value
+            }
+        }));
+    };
+
+    const handlePenaltyDocumentUpload = async (penaltyType, file) => {
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('document', file);
+        formData.append('penalty_type', penaltyType);
+        formData.append('establishment_id', inspectionResult.establishment_id);
+        formData.append('inspection_id', inspectionResult.inspection_id);
+        formData.append('inspection_result_id', inspectionResult.id);
+
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+                        || document.querySelector('input[name="_token"]')?.value
+                        || '';
+
+            const response = await fetch(`/admin/penalties/upload-document`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const result = await response.json();
+            
+            if (response.ok) {
+                handlePenaltyChange(penaltyType, 'document', result.document);
+                setPenaltyDocuments(prev => ({
+                    ...prev,
+                    [penaltyType]: null
+                }));
+                alert('Document uploaded successfully!');
+            } else {
+                console.error('Document upload failed:', result);
+                alert('Document upload failed: ' + (result.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Document upload error:', error);
+            alert('Document upload error: ' + error.message);
+        }
+    };
+
     const getStatusBadge = (status) => {
         const statusConfig = {
             'draft': { color: 'bg-gray-100 text-gray-800', icon: InformationCircleIcon },
@@ -388,33 +761,106 @@ export default function InspectionResultView({ auth }) {
             ? editedResult.conditional_fields?.[response.checklist_question_id] || {}
             : groupedConditionalFields?.[response.checklist_question_id];
             
-        if (!conditionalFields || Object.keys(conditionalFields).length === 0) return null;
+        const currentResponseData = currentResponse || response;
+        const isConditionalQuestion = response.checklist_question?.is_conditional;
+        const hasConditionalLogic = response.checklist_question?.conditional_logic;
+        const triggerResponse = response.checklist_question?.conditional_logic?.trigger_response;
+        const shouldShowConditionalFields = isConditionalQuestion && hasConditionalLogic && 
+                                        currentResponseData.response === triggerResponse;
+        const shouldShowExpiredCheckbox = shouldShowConditionalFields;
+        
+        // During editing, show conditional fields if they should be shown based on the response
+        if (isEditing) {
+            if (!shouldShowConditionalFields && (!conditionalFields || Object.keys(conditionalFields).length === 0)) {
+                return null;
+            }
+        } else {
+            // During view mode, only show if there are existing conditional fields or expired checkbox
+            if ((!conditionalFields || Object.keys(conditionalFields).length === 0) && !shouldShowExpiredCheckbox) {
+                return null;
+            }
+        }
 
         return (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <h6 className="text-sm font-semibold text-blue-800 mb-2">Conditional Information</h6>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {Object.entries(conditionalFields).map(([fieldName, fieldValue]) => {
-                        // Convert field name to readable label
-                        const label = fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        return (
-                            <div key={fieldName} className="text-xs">
-                                <span className="font-medium text-gray-600">{label}:</span>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={fieldValue || ''}
-                                        onChange={(e) => handleConditionalFieldChange(response.checklist_question_id, fieldName, e.target.value)}
-                                        className="ml-1 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="Enter value..."
-                                    />
-                                ) : (
-                                    <span className="ml-1 text-gray-800">{fieldValue || 'N/A'}</span>
-                                )}
+            <div className="mt-3">
+                {/* Conditional Information */}
+                {isEditing ? (
+                    // During editing, always show conditional fields section if it should be visible
+                    shouldShowConditionalFields && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
+                            <h6 className="text-sm font-semibold text-blue-800 mb-2">
+                                {response.checklist_question?.conditional_logic?.type === 'permit' ? 'Permit Information' : 'Clearance Information'}
+                            </h6>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {response.checklist_question?.conditional_logic?.fields?.map((field) => {
+                                    const fieldName = field.name;
+                                    const fieldValue = conditionalFields?.[fieldName] || '';
+                                    
+                                    return (
+                                        <div key={fieldName}>
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                {field.label} {field.required && <span className="text-red-500">*</span>}
+                                            </label>
+                                            {field.type === 'date' ? (
+                                                <input
+                                                    type="date"
+                                                    value={fieldValue}
+                                                    onChange={(e) => handleConditionalFieldChange(response.checklist_question_id, fieldName, e.target.value)}
+                                                    className="w-full border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={fieldValue}
+                                                    onChange={(e) => handleConditionalFieldChange(response.checklist_question_id, fieldName, e.target.value)}
+                                                    placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                                                    className="w-full border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        );
-                    })}
-                </div>
+                        </div>
+                    )
+                ) : (
+                    // During view mode, show existing conditional fields
+                    conditionalFields && Object.keys(conditionalFields).length > 0 && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
+                            <h6 className="text-sm font-semibold text-blue-800 mb-2">Conditional Information</h6>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {Object.entries(conditionalFields).map(([fieldName, fieldValue]) => {
+                                    // Convert field name to readable label
+                                    const label = fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    return (
+                                        <div key={fieldName} className="text-xs">
+                                            <span className="font-medium text-gray-600">{label}:</span>
+                                            <span className="ml-1 text-gray-800">{fieldValue || 'N/A'}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )
+                )}
+                
+                {/* Expired Checkbox for Conditional Questions */}
+                {shouldShowExpiredCheckbox && (
+                    <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <input
+                            type="checkbox"
+                            id={`expired_${response.id}`}
+                            checked={expiredChecks[response.id] || false}
+                            onChange={(e) => handleExpiredCheck(response.id, e.target.checked)}
+                            className="mr-3 h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-yellow-300 rounded"
+                            disabled={!isEditing}
+                        />
+                        <label htmlFor={`expired_${response.id}`} className="text-sm font-medium text-yellow-800 cursor-pointer">
+                            <ExclamationCircleIcon className="w-4 h-4 inline mr-1" />
+                            Document/Permit is Expired
+                        </label>
+                    </div>
+                )}
             </div>
         );
     };
@@ -461,6 +907,19 @@ export default function InspectionResultView({ auth }) {
                                     Download PDF
                                 </button>
                                 <button 
+                                    onClick={() => {
+                                        setEmailData(prev => ({ 
+                                            ...prev, 
+                                            email: inspectionResult.establishment?.email || '' 
+                                        }));
+                                        setShowEmailModal(true);
+                                    }}
+                                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                                >
+                                    <EnvelopeIcon className="w-4 h-4 mr-2" />
+                                    Email PDF
+                                </button>
+                                <button 
                                     onClick={() => window.print()}
                                     className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                                 >
@@ -477,7 +936,7 @@ export default function InspectionResultView({ auth }) {
 
             <div className="max-w-7xl mx-auto print:mx-0">
                 {/* Header Information */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-6 sticky top-0 z-10">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {/* Establishment Info */}
                         <div className="flex items-start space-x-3">
@@ -678,6 +1137,17 @@ export default function InspectionResultView({ auth }) {
                                 <InformationCircleIcon className="w-4 h-4 inline mr-2" />
                                 Photos
                             </button>
+                            <button
+                                onClick={() => setActiveTab('penalties')}
+                                className={`py-3 px-6 border-b-2 font-medium text-sm ${
+                                    activeTab === 'penalties'
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                <BanknotesIcon className="w-4 h-4 inline mr-2" />
+                                Penalties
+                            </button>
                         </nav>
                     </div>
 
@@ -739,7 +1209,7 @@ export default function InspectionResultView({ auth }) {
                                                         const isNegative = currentResponse.response === 'no' || 
                                                                          currentResponse.response === 'non-compliant' || 
                                                                          currentResponse.response === 'lacking' ||
-                                                                         currentResponse.response === 'N/A';
+                                                                         currentResponse.response === 'NON-PRESENT';
                                                         
                                                         return (
                                                             <div key={response.id} className={`p-4 rounded-lg border ${
@@ -753,30 +1223,59 @@ export default function InspectionResultView({ auth }) {
                                                                             {response.checklist_question?.question || 'N/A'}
                                                                         </p>
                                                                         <div className="mt-2">
-                                                                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                                                                currentResponse.response === 'N/A' 
-                                                                                    ? 'bg-gray-100 text-gray-600'
-                                                                                    : currentResponse.response === 'yes' || currentResponse.response === 'compliant'
-                                                                                    ? 'bg-green-100 text-green-800'
-                                                                                    : currentResponse.response === 'no' || currentResponse.response === 'non-compliant'
-                                                                                    ? 'bg-red-100 text-red-800'
-                                                                                    : 'bg-blue-100 text-blue-800'
-                                                                            }`}>
-                                                                                {currentResponse.response === 'N/A' ? 'Not Applicable' : currentResponse.response}
-                                                                            </span>
+                                                                            {isEditing ? (
+                                                                                <select
+                                                                                    value={currentResponse.response || ''}
+                                                                                    onChange={(e) => handleResponseChange(response.id, 'response', e.target.value)}
+                                                                                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium border border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                                                                                >
+                                                                                    <option value="">Select Response</option>
+                                                                                    {response.checklist_question?.options?.map((option, index) => (
+                                                                                        <option key={index} value={option.text || option}>
+                                                                                            {option.text === 'N/A' ? 'Not Applicable' : (option.text || option)}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                    {/* Always include N/A option if not already in options */}
+                                                                                    {!response.checklist_question?.options?.some(opt => (opt.text || opt) === 'N/A') && (
+                                                                                        <option value="N/A">Not Applicable</option>
+                                                                                    )}
+                                                                                </select>
+                                                                            ) : (
+                                                                                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                                                                    currentResponse.response === 'N/A' 
+                                                                                        ? 'bg-gray-100 text-gray-600'
+                                                                                        : currentResponse.response === 'yes' || currentResponse.response === 'compliant'
+                                                                                        ? 'bg-green-100 text-green-800'
+                                                                                        : currentResponse.response === 'no' || currentResponse.response === 'non-compliant' || currentResponse.response === 'lacking' || currentResponse.response === 'NON-PRESENT'
+                                                                                        ? 'bg-red-100 text-red-800'
+                                                                                        : 'bg-blue-100 text-blue-800'
+                                                                                }`}>
+                                                                                    {currentResponse.response === 'N/A' ? 'Not Applicable' : currentResponse.response}
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                         
                                                                         {/* Notes Field */}
                                                                         <div className="mt-3">
                                                                             <label className="text-xs font-medium text-gray-600">Notes:</label>
                                                                             {isEditing ? (
-                                                                                <textarea
-                                                                                    value={currentResponse.notes || ''}
-                                                                                    onChange={(e) => handleResponseChange(response.id, 'notes', e.target.value)}
-                                                                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                                                    rows={2}
-                                                                                    placeholder="Add notes..."
-                                                                                />
+                                                                                <div className="flex items-center space-x-2">
+                                                                                    <textarea
+                                                                                        value={currentResponse.notes ?? ''}
+                                                                                        onChange={(e) => handleResponseChange(response.id, 'notes', e.target.value)}
+                                                                                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                                                        rows={2}
+                                                                                        placeholder="Notes cannot be edited..."
+                                                                                        readOnly
+                                                                                    />
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleClearNotes(response.id)}
+                                                                                        className="mt-1 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition"
+                                                                                    >
+                                                                                        Clear
+                                                                                    </button>
+                                                                                </div>
                                                                             ) : (
                                                                                 <p className="text-sm text-gray-700 mt-1">
                                                                                     {currentResponse.notes || 'No notes provided.'}
@@ -1114,8 +1613,585 @@ export default function InspectionResultView({ auth }) {
                                 </div>
                             </div>
                         )}
+
+                        {/* Penalties Tab */}
+                        {activeTab === 'penalties' && (
+                            <div>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-semibold text-gray-900">Penalties Management</h3>
+                                    <button
+                                        onClick={() => setShowPenaltiesSidebar(!showPenaltiesSidebar)}
+                                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                    >
+                                        {showPenaltiesSidebar ? (
+                                            <>
+                                                <EyeSlashIcon className="w-4 h-4 mr-2" />
+                                                Hide Sidebar
+                                            </>
+                                        ) : (
+                                            <>
+                                                <EyeIcon className="w-4 h-4 mr-2" />
+                                                Show Sidebar
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    {/* First Penalty */}
+                                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                        <div className="bg-red-50 px-4 py-3 border-b border-red-200">
+                                            <h4 className="text-md font-semibold text-red-800 flex items-center">
+                                                <BanknotesIcon className="w-5 h-5 mr-2" />
+                                                1st Penalty
+                                            </h4>
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Description
+                                                </label>
+                                                {isEditing ? (
+                                                    <textarea
+                                                        value={penalties.first_penalty.description}
+                                                        onChange={(e) => handlePenaltyChange('first_penalty', 'description', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        rows={3}
+                                                        placeholder="Enter first penalty description..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('first_penalty');
+                                                            return (
+                                                                <div>
+                                                                    <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                                        {displayData.description}
+                                                                    </p>
+                                                                    {displayData.isPrevious && (
+                                                                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                                                                            <div className="flex items-center mb-1">
+                                                                                <ExclamationCircleIcon className="w-3 h-3 text-yellow-600 mr-1" />
+                                                                                <span className="font-medium text-yellow-800">
+                                                                                    Previous Unpaid Penalty
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-gray-600">
+                                                                                From inspection on {displayData.inspectionDate}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Amount
+                                                </label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        value={penalties.first_penalty.amount}
+                                                        onChange={(e) => handlePenaltyChange('first_penalty', 'amount', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        placeholder="Enter amount..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                            ₱{penalties.first_penalty.amount || '0.00'}
+                                                        </p>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('first_penalty');
+                                                            if (displayData.isPrevious) {
+                                                                return (
+                                                                    <div className="mt-1 text-xs text-red-600 font-medium">
+                                                                        Status: Unpaid
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Transparency Document
+                                                </label>
+                                                {isEditing ? (
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="file"
+                                                            onChange={(e) => setPenaltyDocuments(prev => ({
+                                                                ...prev,
+                                                                first_penalty: e.target.files[0]
+                                                            }))}
+                                                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                        />
+                                                        {penaltyDocuments.first_penalty && (
+                                                            <button
+                                                                onClick={() => handlePenaltyDocumentUpload('first_penalty', penaltyDocuments.first_penalty)}
+                                                                className="w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-sm"
+                                                            >
+                                                                Upload Document
+                                                            </button>
+                                                        )}
+                                                        {penalties.first_penalty.document && (
+                                                            <div className="flex items-center justify-between bg-green-50 p-2 rounded">
+                                                                <span className="text-sm text-green-800">Document uploaded</span>
+                                                                <a
+                                                                    href={penalties.first_penalty.document.url || `/storage/${penalties.first_penalty.document.path}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-600 hover:text-blue-800 text-sm"
+                                                                >
+                                                                    View
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 p-2 rounded">
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('first_penalty');
+                                                            const document = displayData.document;
+                                                            
+                                                            if (document) {
+                                                                return (
+                                                                    <div>
+                                                                        <a
+                                                                            href={document.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                                                                        >
+                                                                            <DocumentTextIcon className="w-4 h-4 mr-1" />
+                                                                            View Document
+                                                                        </a>
+                                                                        {displayData.isPrevious && (
+                                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                                From previous inspection
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <span className="text-sm text-gray-500">
+                                                                    {displayData.isPrevious ? 'No document from previous inspection' : 'No document uploaded'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Second Penalty */}
+                                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                        <div className="bg-orange-50 px-4 py-3 border-b border-orange-200">
+                                            <h4 className="text-md font-semibold text-orange-800 flex items-center">
+                                                <BanknotesIcon className="w-5 h-5 mr-2" />
+                                                2nd Penalty
+                                            </h4>
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Description
+                                                </label>
+                                                {isEditing ? (
+                                                    <textarea
+                                                        value={penalties.second_penalty.description}
+                                                        onChange={(e) => handlePenaltyChange('second_penalty', 'description', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        rows={3}
+                                                        placeholder="Enter second penalty description..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                            {penalties.second_penalty.description || 'No description provided'}
+                                                        </p>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('second_penalty');
+                                                            if (displayData.isPrevious) {
+                                                                return (
+                                                                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                                                                        <div className="flex items-center mb-1">
+                                                                            <ExclamationCircleIcon className="w-3 h-3 text-yellow-600 mr-1" />
+                                                                            <span className="font-medium text-yellow-800">
+                                                                                Previous Unpaid Penalty
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-gray-600">
+                                                                            From inspection on {displayData.inspectionDate}
+                                                                        </p>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Amount
+                                                </label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        value={penalties.second_penalty.amount}
+                                                        onChange={(e) => handlePenaltyChange('second_penalty', 'amount', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        placeholder="Enter amount..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                            ₱{penalties.second_penalty.amount || '0.00'}
+                                                        </p>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('second_penalty');
+                                                            if (displayData.isPrevious) {
+                                                                return (
+                                                                    <div className="mt-1 text-xs text-red-600 font-medium">
+                                                                        Status: Unpaid
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Transparency Document
+                                                </label>
+                                                {isEditing ? (
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="file"
+                                                            onChange={(e) => setPenaltyDocuments(prev => ({
+                                                                ...prev,
+                                                                second_penalty: e.target.files[0]
+                                                            }))}
+                                                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                        />
+                                                        {penaltyDocuments.second_penalty && (
+                                                            <button
+                                                                onClick={() => handlePenaltyDocumentUpload('second_penalty', penaltyDocuments.second_penalty)}
+                                                                className="w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-sm"
+                                                            >
+                                                                Upload Document
+                                                            </button>
+                                                        )}
+                                                        {penalties.second_penalty.document && (
+                                                            <div className="flex items-center justify-between bg-green-50 p-2 rounded">
+                                                                <span className="text-sm text-green-800">Document uploaded</span>
+                                                                <a
+                                                                    href={penalties.second_penalty.document.url || `/storage/${penalties.second_penalty.document.path}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-600 hover:text-blue-800 text-sm"
+                                                                >
+                                                                    View
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 p-2 rounded">
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('second_penalty');
+                                                            const document = displayData.document;
+                                                            
+                                                            if (document) {
+                                                                return (
+                                                                    <div>
+                                                                        <a
+                                                                            href={document.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                                                                        >
+                                                                            <DocumentTextIcon className="w-4 h-4 mr-1" />
+                                                                            View Document
+                                                                        </a>
+                                                                        {displayData.isPrevious && (
+                                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                                From previous inspection
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <span className="text-sm text-gray-500">
+                                                                    {displayData.isPrevious ? 'No document from previous inspection' : 'No document uploaded'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Third Penalty */}
+                                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                        <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
+                                            <h4 className="text-md font-semibold text-purple-800 flex items-center">
+                                                <BanknotesIcon className="w-5 h-5 mr-2" />
+                                                3rd Penalty
+                                            </h4>
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Description
+                                                </label>
+                                                {isEditing ? (
+                                                    <textarea
+                                                        value={penalties.third_penalty.description}
+                                                        onChange={(e) => handlePenaltyChange('third_penalty', 'description', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        rows={3}
+                                                        placeholder="Enter third penalty description..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                            {penalties.third_penalty.description || 'No description provided'}
+                                                        </p>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('third_penalty');
+                                                            if (displayData.isPrevious) {
+                                                                return (
+                                                                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                                                                        <div className="flex items-center mb-1">
+                                                                            <ExclamationCircleIcon className="w-3 h-3 text-yellow-600 mr-1" />
+                                                                            <span className="font-medium text-yellow-800">
+                                                                                Previous Unpaid Penalty
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-gray-600">
+                                                                            From inspection on {displayData.inspectionDate}
+                                                                        </p>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Amount
+                                                </label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        value={penalties.third_penalty.amount}
+                                                        onChange={(e) => handlePenaltyChange('third_penalty', 'amount', e.target.value)}
+                                                        className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        placeholder="Enter amount..."
+                                                    />
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                                            ₱{penalties.third_penalty.amount || '0.00'}
+                                                        </p>
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('third_penalty');
+                                                            if (displayData.isPrevious) {
+                                                                return (
+                                                                    <div className="mt-1 text-xs text-red-600 font-medium">
+                                                                        Status: Unpaid
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Transparency Document
+                                                </label>
+                                                {isEditing ? (
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="file"
+                                                            onChange={(e) => setPenaltyDocuments(prev => ({
+                                                                ...prev,
+                                                                third_penalty: e.target.files[0]
+                                                            }))}
+                                                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                        />
+                                                        {penaltyDocuments.third_penalty && (
+                                                            <button
+                                                                onClick={() => handlePenaltyDocumentUpload('third_penalty', penaltyDocuments.third_penalty)}
+                                                                className="w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-sm"
+                                                            >
+                                                                Upload Document
+                                                            </button>
+                                                        )}
+                                                        {penalties.third_penalty.document && (
+                                                            <div className="flex items-center justify-between bg-green-50 p-2 rounded">
+                                                                <span className="text-sm text-green-800">Document uploaded</span>
+                                                                <a
+                                                                    href={penalties.third_penalty.document.url || `/storage/${penalties.third_penalty.document.path}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-600 hover:text-blue-800 text-sm"
+                                                                >
+                                                                    View
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 p-2 rounded">
+                                                        {(() => {
+                                                            const displayData = getPenaltyDisplayData('third_penalty');
+                                                            const document = displayData.document;
+                                                            
+                                                            if (document) {
+                                                                return (
+                                                                    <div>
+                                                                        <a
+                                                                            href={document.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                                                                        >
+                                                                            <DocumentTextIcon className="w-4 h-4 mr-1" />
+                                                                            View Document
+                                                                        </a>
+                                                                        {displayData.isPrevious && (
+                                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                                From previous inspection
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <span className="text-sm text-gray-500">
+                                                                    {displayData.isPrevious ? 'No document from previous inspection' : 'No document uploaded'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Penalties Summary */}
+                                <div className="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-6">
+                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Penalties Summary</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                            <h5 className="text-sm font-medium text-gray-600 mb-2">1st Penalty</h5>
+                                            <p className="text-xl font-bold text-red-600">
+                                                ₱{penalties.first_penalty.amount || '0.00'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                            <h5 className="text-sm font-medium text-gray-600 mb-2">2nd Penalty</h5>
+                                            <p className="text-xl font-bold text-orange-600">
+                                                ₱{penalties.second_penalty.amount || '0.00'}
+                                            </p>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                            <h5 className="text-sm font-medium text-gray-600 mb-2">3rd Penalty</h5>
+                                            <p className="text-xl font-bold text-purple-600">
+                                                ₱{penalties.third_penalty.amount || '0.00'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-gray-300">
+                                        <div className="flex justify-between items-center">
+                                            <h5 className="text-lg font-semibold text-gray-900">Total Penalties</h5>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                ₱{(parseFloat(penalties.first_penalty.amount || 0) + 
+                                                    parseFloat(penalties.second_penalty.amount || 0) + 
+                                                    parseFloat(penalties.third_penalty.amount || 0)).toFixed(2)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
+
+            {/* Penalties Sidebar */}
+            {showPenaltiesSidebar && (
+                <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-40 overflow-y-auto">
+                    <div className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900">Penalties Quick View</h3>
+                            <button
+                                onClick={() => setShowPenaltiesSidebar(false)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                                <h4 className="font-semibold text-red-800 mb-2">1st Penalty</h4>
+                                <p className="text-sm text-gray-700 mb-2">{penalties.first_penalty.description || 'No description'}</p>
+                                <p className="text-lg font-bold text-red-600">₱{penalties.first_penalty.amount || '0.00'}</p>
+                            </div>
+                            
+                            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                                <h4 className="font-semibold text-orange-800 mb-2">2nd Penalty</h4>
+                                <p className="text-sm text-gray-700 mb-2">{penalties.second_penalty.description || 'No description'}</p>
+                                <p className="text-lg font-bold text-orange-600">₱{penalties.second_penalty.amount || '0.00'}</p>
+                            </div>
+                            
+                            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                                <h4 className="font-semibold text-purple-800 mb-2">3rd Penalty</h4>
+                                <p className="text-sm text-gray-700 mb-2">{penalties.third_penalty.description || 'No description'}</p>
+                                <p className="text-lg font-bold text-purple-600">₱{penalties.third_penalty.amount || '0.00'}</p>
+                            </div>
+                            
+                            <div className="bg-gray-900 p-4 rounded-lg text-white">
+                                <h4 className="font-semibold mb-2">Total Amount</h4>
+                                <p className="text-2xl font-bold">
+                                    ₱{(parseFloat(penalties.first_penalty.amount || 0) + 
+                                        parseFloat(penalties.second_penalty.amount || 0) + 
+                                        parseFloat(penalties.third_penalty.amount || 0)).toFixed(2)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             </div>
 
         {/* Photo Modal */}
@@ -1173,6 +2249,76 @@ export default function InspectionResultView({ auth }) {
                             >
                                 Close
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* Email Modal */}
+        {showEmailModal && (
+            <div className="fixed inset-0 z-[9999] overflow-y-auto">
+                <div className="flex min-h-screen items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setShowEmailModal(false)}></div>
+                    
+                    <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full z-[10000]">
+                        <div className="bg-green-600 px-6 py-4 rounded-t-xl">
+                            <h3 className="text-lg font-semibold text-white">Email Inspection Report</h3>
+                        </div>
+                        
+                        <div className="p-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                    <input
+                                        type="email"
+                                        value={emailData.email}
+                                        onChange={(e) => setEmailData(prev => ({ ...prev, email: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="recipient@example.com"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Subject (optional)</label>
+                                    <input
+                                        type="text"
+                                        value={emailData.subject}
+                                        onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="Inspection Report"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message (optional)</label>
+                                    <textarea
+                                        value={emailData.message}
+                                        onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        rows={3}
+                                        placeholder="Please find attached the inspection report."
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-end space-x-3 mt-6">
+                                <button
+                                    onClick={() => setShowEmailModal(false)}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSendEmail}
+                                    disabled={!emailData.email || isSending}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                >
+                                    {isSending ? 'Sending...' : 'Send Email'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

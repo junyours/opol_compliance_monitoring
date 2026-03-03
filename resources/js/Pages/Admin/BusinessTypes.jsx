@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage, Link, useForm } from '@inertiajs/react';
 import { useNotification } from '@/Components/ValidationSystem';
+import Pagination from '@/Components/Pagination';
 import { 
   TrashIcon, 
   PencilSquareIcon, 
@@ -14,6 +15,8 @@ export default function Index({ auth }) {
   const { businessTypes, flash } = usePage().props;
   const [modalOpen, setModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Ensure flash is defined to prevent errors
   const flashMessages = flash || {};
@@ -39,6 +42,18 @@ export default function Index({ auth }) {
     type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalItems = filteredBusinessTypes.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedBusinessTypes = filteredBusinessTypes.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleCreate = () => {
     setEditingType(null);
@@ -252,7 +267,7 @@ export default function Index({ auth }) {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-gray-900">Business Type List</h3>
               <div className="text-xs text-gray-600">
-                {filteredBusinessTypes.length} of {(businessTypes || []).length} types
+                {paginatedBusinessTypes.length} of {totalItems} types
               </div>
             </div>
           </div>
@@ -267,8 +282,8 @@ export default function Index({ auth }) {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
-                {filteredBusinessTypes.length > 0 ? (
-                  filteredBusinessTypes.map((type) => (
+                {paginatedBusinessTypes.length > 0 ? (
+                  paginatedBusinessTypes.map((type) => (
                     <tr
                       key={type.id}
                       className="hover:bg-gray-50 transition-colors duration-200"
@@ -337,6 +352,15 @@ export default function Index({ auth }) {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={totalItems}
+          />
         </div>
 
         {/* Modal */}
