@@ -16,6 +16,8 @@ import {
     BuildingOfficeIcon,
     UserIcon,
     MagnifyingGlassIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 export default function OpenInspection({ auth }) {
@@ -26,6 +28,10 @@ export default function OpenInspection({ auth }) {
     const [selectedInspection, setSelectedInspection] = useState(null);
     const [completedInspections, setCompletedInspections] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const {
         showSuccess,
@@ -317,6 +323,43 @@ export default function OpenInspection({ auth }) {
         });
     };
 
+    // Get paginated inspections
+    const getPaginatedInspections = () => {
+        const filtered = getFilteredAndSortedInspections();
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return filtered.slice(startIndex, endIndex);
+    };
+
+    // Get pagination info
+    const getPaginationInfo = () => {
+        const filtered = getFilteredAndSortedInspections();
+        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage + 1;
+        const endIndex = Math.min(currentPage * itemsPerPage, filtered.length);
+        
+        return {
+            totalItems: filtered.length,
+            totalPages,
+            currentPage,
+            startIndex: filtered.length > 0 ? startIndex : 0,
+            endIndex,
+            hasNextPage: currentPage < totalPages,
+            hasPrevPage: currentPage > 1
+        };
+    };
+
+    // Handle page change
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+    };
+
+    // Handle items per page change
+    const handleItemsPerPageChange = (newItemsPerPage) => {
+        setItemsPerPage(newItemsPerPage);
+        setCurrentPage(1); // Reset to first page when changing items per page
+    };
+
     const formatDateTime = (timestamp) => {
         const date = new Date(timestamp);
 
@@ -527,8 +570,22 @@ export default function OpenInspection({ auth }) {
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900">Scheduled Inspections</h3>
                                     <p className="text-sm text-gray-500 mt-1">
-                                        {getFilteredAndSortedInspections().length} of {inspections?.length || 0} inspection schedules
+                                        {getPaginationInfo().startIndex}-{getPaginationInfo().endIndex} of {getPaginationInfo().totalItems} inspection schedules
                                     </p>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <label className="text-sm text-gray-600">Show:</label>
+                                    <select
+                                        value={itemsPerPage}
+                                        onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value))}
+                                        className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={15}>15</option>
+                                        <option value={20}>20</option>
+                                    </select>
+                                    <span className="text-sm text-gray-600">per page</span>
                                 </div>
                             </div>
                             <div className="relative">
@@ -536,7 +593,10 @@ export default function OpenInspection({ auth }) {
                                 <input
                                     type="text"
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCurrentPage(1); // Reset to first page when searching
+                                    }}
                                     placeholder="Search by quarter, date, or notes..."
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
@@ -561,7 +621,7 @@ export default function OpenInspection({ auth }) {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {getFilteredAndSortedInspections().length ? getFilteredAndSortedInspections().map(inspection => (
+                                    {getPaginatedInspections().length ? getPaginatedInspections().map(inspection => (
                                         <tr key={inspection.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -636,6 +696,81 @@ export default function OpenInspection({ auth }) {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {/* Pagination Controls */}
+                        {getPaginationInfo().totalPages > 1 && (
+                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm text-gray-700">
+                                        Showing <span className="font-medium">{getPaginationInfo().startIndex}</span> to{' '}
+                                        <span className="font-medium">{getPaginationInfo().endIndex}</span> of{' '}
+                                        <span className="font-medium">{getPaginationInfo().totalItems}</span> results
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => handlePageChange(currentPage - 1)}
+                                            disabled={!getPaginationInfo().hasPrevPage}
+                                            className="relative inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                        >
+                                            <ChevronLeftIcon className="w-4 h-4 mr-1" />
+                                            Previous
+                                        </button>
+                                        
+                                        {/* Page Numbers */}
+                                        <div className="flex items-center space-x-1">
+                                            {Array.from({ length: getPaginationInfo().totalPages }, (_, i) => i + 1).map(page => {
+                                                // Show current page, first, last, and pages around current
+                                                const showPage = 
+                                                    page === 1 || 
+                                                    page === getPaginationInfo().totalPages || 
+                                                    (page >= currentPage - 1 && page <= currentPage + 1);
+                                                    
+                                                if (!showPage && page === currentPage - 2) {
+                                                    return (
+                                                        <span key={page} className="px-3 py-2 text-sm text-gray-500">
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+                                                
+                                                if (!showPage && page === currentPage + 2) {
+                                                    return (
+                                                        <span key={page} className="px-3 py-2 text-sm text-gray-500">
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+                                                
+                                                if (!showPage) return null;
+                                                
+                                                return (
+                                                    <button
+                                                        key={page}
+                                                        onClick={() => handlePageChange(page)}
+                                                        className={`relative inline-flex items-center px-3 py-2 rounded-md text-sm font-medium ${
+                                                            page === currentPage
+                                                                ? 'bg-blue-600 text-white border border-blue-600'
+                                                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        <button
+                                            onClick={() => handlePageChange(currentPage + 1)}
+                                            disabled={!getPaginationInfo().hasNextPage}
+                                            className="relative inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                        >
+                                            Next
+                                            <ChevronRightIcon className="w-4 h-4 ml-1" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                 {/* Completed Inspections Modal */}
