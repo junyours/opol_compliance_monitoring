@@ -23,10 +23,6 @@ export default function AdminInspectionForm({ auth }) {
         hideLoading
     } = useNotification();
     
-    // Debug: Log existing inspections data
-    console.log('=== Component Loaded ===');
-    console.log('Existing inspections from props:', existingInspections);
-    console.log('Number of existing inspections:', existingInspections.length);
     const [selectedEstablishment, setSelectedEstablishment] = useState('');
     const [selectedEstablishmentData, setSelectedEstablishmentData] = useState(null);
     const [showEstablishmentModal, setShowEstablishmentModal] = useState(true);
@@ -49,6 +45,9 @@ export default function AdminInspectionForm({ auth }) {
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
     const [modalShake, setModalShake] = useState(false);
     const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
+    const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+    const [duplicateInspectionInfo, setDuplicateInspectionInfo] = useState(null);
+    const [pendingEstablishmentId, setPendingEstablishmentId] = useState(null);
     const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0]);
     const [inspectionTime, setInspectionTime] = useState(new Date().toTimeString().slice(0, 5));
     const [quarter, setQuarter] = useState('Q1');
@@ -76,22 +75,44 @@ export default function AdminInspectionForm({ auth }) {
 
     // Initialize existing inspections data from props
     React.useEffect(() => {
-        console.log('=== Initializing Existing Inspections ===');
-        console.log('Props existingInspections:', existingInspections);
         setExistingInspectionsData(existingInspections);
     }, [existingInspections]);
 
-    const handleEstablishmentSelect = (establishmentId) => {
-        setSelectedEstablishment(establishmentId);
-        const establishment = establishments.find(est => est.id === establishmentId);
-        setSelectedEstablishmentData(establishment);
-        console.log('Selected establishment:', establishment); // Debug log
-        setShowEstablishmentModal(false);
+    const handleEstablishmentSelect = async (establishmentId) => {
+        setPendingEstablishmentId(establishmentId);
+        
+        // Check for duplicate inspection
+        const hasDuplicate = await checkDuplicateInspection(establishmentId);
+        
+        if (hasDuplicate) {
+            setShowDuplicateWarning(true);
+        } else {
+            setSelectedEstablishment(establishmentId);
+            const establishment = establishments.find(est => est.id === establishmentId);
+            setSelectedEstablishmentData(establishment);
+            setShowEstablishmentModal(false);
+        }
     };
 
     const handleCancelModal = () => {
         setShowEstablishmentModal(false);
         window.history.back();
+    };
+
+    const handleDuplicateWarningContinue = () => {
+        // User confirmed to continue despite duplicate
+        setSelectedEstablishment(pendingEstablishmentId);
+        const establishment = establishments.find(est => est.id === pendingEstablishmentId);
+        setSelectedEstablishmentData(establishment);
+        setShowDuplicateWarning(false);
+        setShowEstablishmentModal(false);
+        setPendingEstablishmentId(null);
+    };
+
+    const handleDuplicateWarningCancel = () => {
+        // User cancelled, go back to establishment selection
+        setShowDuplicateWarning(false);
+        setPendingEstablishmentId(null);
     };
 
     const handleSearchChange = (e) => {
@@ -110,6 +131,79 @@ export default function AdminInspectionForm({ auth }) {
             establishment.type_of_business?.toLowerCase().includes(term) ||
             establishment.Barangay?.toLowerCase().includes(term)
         );
+    };
+
+    const checkDuplicateInspection = async (establishmentId) => {
+        try {
+            // For admin, we need to consider the date selection mode
+            let targetDate = inspectionDate;
+            let targetQuarter = quarter;
+            
+            if (dateSelectionMode === 'existing' && selectedExistingInspection) {
+                // Use the existing inspection's date and quarter
+                const existingInspection = existingInspectionsData.find(insp => insp.id === selectedExistingInspection);
+                if (existingInspection) {
+                    targetDate = existingInspection.date;
+                    targetQuarter = existingInspection.quarter;
+                }
+            }
+            
+            // Extract year from the selected date
+            const targetYear = targetDate ? new Date(targetDate).getFullYear() : new Date().getFullYear();
+            
+            // Extract quarter number from quarter string (e.g., "Q1" -> 1)
+            const quarterMatch = targetQuarter.match(/(\d+)/);
+            const quarterNum = quarterMatch ? parseInt(quarterMatch[1]) : 1;
+            
+            
+            // Check for duplicate inspection via API
+            // This will query your actual database for existing inspections
+            try {
+                // TEMPORARY TEST MODE - Set to true to test the warning modal
+                const TEST_DUPLICATE_WARNING = false; // Change to true to test
+                
+                if (TEST_DUPLICATE_WARNING) {
+                    // Simulate a duplicate for testing
+                    const establishment = establishments.find(e => e.id === establishmentId);
+                    const testDuplicateInfo = {
+                        inspection_timestamp: '2026-02-27T10:53:00',
+                        inspector_name: 'Jessther Jay Salon II Menro',
+                        establishment_name: establishment?.name || 'Test Establishment',
+                        quarter: `Quarter ${quarterNum}`,
+                        year: targetYear
+                    };
+                    
+                    setDuplicateInspectionInfo(testDuplicateInfo);
+                    return true;
+                }
+                
+                const response = await fetch(`/admin/inspection/check-duplicate?establishment_id=${establishmentId}&quarter=${quarterNum}&year=${targetYear}`);
+                
+                // If endpoint doesn't exist yet, return false (no duplicate check)
+                if (response.status === 404) {
+                    return false;
+                }
+                
+                const data = await response.json();
+                
+                if (data.hasDuplicate) {
+                    setDuplicateInspectionInfo(data.duplicateInspection);
+                    return true;
+                }
+                
+                return false;
+            } catch (error) {
+                // Handle network errors or JSON parsing errors
+                if (error.message.includes('Unexpected token')) {
+                    return false;
+                }
+                console.error('Error checking admin duplicate inspection:', error);
+                return false;
+            }
+        } catch (error) {
+            console.error('Error checking admin duplicate inspection:', error);
+            return false;
+        }
     };
 
     const checkPermitExpiration = (expiryDate) => {
@@ -467,29 +561,13 @@ export default function AdminInspectionForm({ auth }) {
     };
 
     const handleExistingInspectionSelect = (inspectionId) => {
-        console.log('=== Existing Inspection Selection ===');
-        console.log('Selected inspection ID:', inspectionId);
-        console.log('Current existingInspectionsData array:', existingInspectionsData);
-        console.log('Array length:', existingInspectionsData.length);
-        
         // Convert to number to fix type mismatch
         const numericId = parseInt(inspectionId, 10);
-        console.log('Converted numeric ID:', numericId);
-        
-        // Log each inspection in the array
-        existingInspectionsData.forEach((inspection, index) => {
-            console.log(`Inspection ${index}:`, inspection);
-        });
         
         setSelectedExistingInspection(inspectionId);
         const inspection = existingInspectionsData.find(insp => insp.id === numericId);
         
         if (inspection) {
-            console.log('Found inspection data:', inspection);
-            console.log('Setting date to:', inspection.date);
-            console.log('Setting time to:', inspection.time);
-            console.log('Setting quarter to:', inspection.quarter);
-            
             setInspectionDate(inspection.date);
             setInspectionTime(inspection.time);
             setQuarter(inspection.quarter);
@@ -500,24 +578,18 @@ export default function AdminInspectionForm({ auth }) {
     };
 
     const handleDateSelectionModeChange = (mode) => {
-        console.log('=== Date Selection Mode Changed ===');
-        console.log('New mode:', mode);
-        console.log('Previous mode:', dateSelectionMode);
-        
         setDateSelectionMode(mode);
         if (mode === 'new') {
             setSelectedExistingInspection('');
             // Reset to current date/time when switching to new mode
             const newDate = new Date().toISOString().split('T')[0];
             const newTime = new Date().toTimeString().slice(0, 5);
-            console.log('Resetting to new mode - Date:', newDate, 'Time:', newTime, 'Quarter: Q1');
             
             setInspectionDate(newDate);
             setInspectionTime(newTime);
             setQuarter('Q1'); // Reset to default quarter
         } else {
             // Clear date/time when switching to existing mode
-            console.log('Switching to existing mode - clearing fields');
             setInspectionDate('');
             setInspectionTime('');
             setQuarter(''); // Clear quarter
@@ -578,19 +650,9 @@ export default function AdminInspectionForm({ auth }) {
     };
 
     const confirmSubmit = () => {
-        console.log('=== Form Submission Started ===');
-        console.log('Date selection mode:', dateSelectionMode);
-        console.log('Selected existing inspection:', selectedExistingInspection);
-        console.log('Current inspection date:', inspectionDate);
-        console.log('Current inspection time:', inspectionTime);
-        console.log('Current quarter:', quarter);
-        console.log('Selected establishment:', selectedEstablishment);
-        console.log('Selected inspector:', inspectorId);
-        
         const hasWarnings = progress < 100;
         
         if (hasWarnings) {
-            console.log('Submission blocked: Progress not complete');
             setModalShake(true);
             setTimeout(() => setModalShake(false), 600);
             return;
@@ -598,25 +660,20 @@ export default function AdminInspectionForm({ auth }) {
 
         // Validate date selection
         if (dateSelectionMode === 'existing' && !selectedExistingInspection) {
-            console.log('Submission blocked: No existing inspection selected');
             alert('Please select an existing inspection date and time.');
             return;
         }
 
         if (dateSelectionMode === 'new' && (!inspectionDate || !inspectionTime)) {
-            console.log('Submission blocked: Missing date or time in new mode');
             alert('Please enter both inspection date and time.');
             return;
         }
 
         // Validate inspector selection
         if (!inspectorId) {
-            console.log('Submission blocked: No inspector selected');
             alert('Please select an inspector.');
             return;
         }
-
-        console.log('Validation passed, preparing form data...');
         
         const allRecommendations = [
             ...automatedRecommendations.map(rec => rec.message),
@@ -640,15 +697,11 @@ export default function AdminInspectionForm({ auth }) {
             automated_recommendations: automatedRecommendations,
         };
 
-        console.log('Form data being submitted:', formData);
-        console.log('Sending to: /admin/inspection-store');
-        
         // Show loading message
         showLoading('Submitting inspection...', 'Please wait while we save your inspection data.');
         
         router.post('/admin/inspection-store', formData, {
             onSuccess: (page) => {
-                console.log('Success response:', page);
                 hideLoading();
                 setShowConfirmationModal(false);
                 
@@ -753,6 +806,69 @@ export default function AdminInspectionForm({ auth }) {
                                         <p className="text-gray-500">No establishments found</p>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Duplicate Inspection Warning Modal */}
+            {showDuplicateWarning && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+                        
+                        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        
+                        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div className="sm:flex sm:items-start">
+                                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+                                        <ExclamationCircleIcon className="h-6 w-6 text-yellow-600" />
+                                    </div>
+                                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                                            Duplicate Inspection Warning
+                                        </h3>
+                                        <div className="mt-2">
+                                            <p className="text-sm text-gray-500">
+                                                This establishment has already been inspected for {quarter} {new Date(inspectionDate).getFullYear()}.
+                                            </p>
+                                            {duplicateInspectionInfo && (
+                                                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                                                    <p className="text-sm text-gray-700">
+                                                        <strong>Previous Inspection:</strong><br />
+                                                        Date: {new Date(duplicateInspectionInfo.inspection_timestamp).toLocaleDateString('en-US', { 
+                                                            year: 'numeric', 
+                                                            month: 'long', 
+                                                            day: 'numeric' 
+                                                        })}<br />
+                                                        Inspector: {duplicateInspectionInfo.inspector_name || 'N/A'}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            <p className="text-sm text-gray-500 mt-3">
+                                                Would you like to continue with this inspection anyway?
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button
+                                    type="button"
+                                    onClick={handleDuplicateWarningContinue}
+                                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                                >
+                                    Continue Anyway
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDuplicateWarningCancel}
+                                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     </div>

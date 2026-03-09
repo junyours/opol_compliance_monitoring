@@ -40,7 +40,12 @@ class EstablishmentController extends Controller
             'name' => 'nullable|string|max:255',
             'proponent' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
-            'contact_number' => 'nullable|string|max:20',
+            'contact_number' => [
+                'nullable',
+                'string',
+                'regex:/^[0-9]{11}$/',
+                'max:20'
+            ],
             'email' => 'nullable|email|unique:establishments,email',
             'type_of_business_id' => 'nullable|exists:business_types,id',
             'Barangay' => 'nullable|string|max:255',
@@ -48,7 +53,22 @@ class EstablishmentController extends Controller
             'number_of_rooms' => 'nullable|integer|min:0',
             'number_of_employees' => 'nullable|integer|min:0',
             'status' => 'nullable|in:active,inactive,terminated',
+        ], [
+            'contact_number.regex' => 'Contact number must be exactly 11 digits.',
         ]);
+
+        // Check for duplicate name + business type combination
+        if ($request->filled('name') && $request->filled('type_of_business_id')) {
+            $existing = Establishment::where('name', $request->name)
+                ->where('type_of_business_id', $request->type_of_business_id)
+                ->first();
+            
+            if ($existing) {
+                return redirect()->back()
+                    ->withErrors(['name' => 'An establishment with this name and business type already exists.'])
+                    ->withInput();
+            }
+        }
 
         Establishment::create($validated);
 
@@ -73,7 +93,12 @@ class EstablishmentController extends Controller
             'name' => 'nullable|string|max:255',
             'proponent' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
-            'contact_number' => 'nullable|string|max:20',
+            'contact_number' => [
+                'nullable',
+                'string',
+                'regex:/^[0-9]{11}$/',
+                'max:20'
+            ],
             'email' => 'nullable|email|unique:establishments,email,' . $establishment->id,
             'type_of_business_id' => 'nullable|exists:business_types,id',
             'Barangay' => 'nullable|string|max:255',
@@ -81,7 +106,23 @@ class EstablishmentController extends Controller
             'number_of_rooms' => 'nullable|integer|min:0',
             'number_of_employees' => 'nullable|integer|min:0',
             'status' => 'nullable|in:active,inactive,terminated',
+        ], [
+            'contact_number.regex' => 'Contact number must be exactly 11 digits.',
         ]);
+
+        // Check for duplicate name + business type combination (excluding current establishment)
+        if ($request->filled('name') && $request->filled('type_of_business_id')) {
+            $existing = Establishment::where('name', $request->name)
+                ->where('type_of_business_id', $request->type_of_business_id)
+                ->where('id', '!=', $establishment->id)
+                ->first();
+            
+            if ($existing) {
+                return redirect()->back()
+                    ->withErrors(['name' => 'An establishment with this name and business type already exists.'])
+                    ->withInput();
+            }
+        }
 
         // Debug logging
         \Log::info('Validation passed');

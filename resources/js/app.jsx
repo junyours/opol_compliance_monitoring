@@ -7,7 +7,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { DarkModeProvider } from './Context/DarkModeContext';
 import { NotificationProvider } from './Components/ValidationSystem';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'CMS';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

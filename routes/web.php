@@ -144,6 +144,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/inspection/create', [AdminInspectionController::class, 'create'])->name('admin.inspection.create');
     Route::post('/inspection-store', [AdminInspectionController::class, 'store'])->name('admin.inspection.store');
     
+    // Duplicate inspection check route
+    Route::get('/inspection/check-duplicate', [AdminInspectionController::class, 'checkDuplicate'])->name('inspection.check-duplicate');
+    
     // Establishment Monitoring
     Route::get('/monitoring', [InspectionResultController::class, 'monitoring'])->name('monitoring.index');
 
@@ -311,6 +314,9 @@ Route::middleware(['auth', 'staff'])->prefix('staff')->name('staff.')->group(fun
     Route::get('/schedule', [StaffScheduleController::class, 'index'])->name('schedule');
     Route::get('/schedule/{inspection}/create', [StaffScheduleController::class, 'create'])->name('inspection.create');
     Route::post('/inspection/store', [InspectionResultController::class, 'store'])->name('inspection.store');
+    
+    // Duplicate inspection check route for staff
+    Route::get('/inspection/check-duplicate', [InspectionResultController::class, 'checkDuplicate'])->name('inspection.check-duplicate');
     
     // Establishment routes for staff
     Route::get('/establishments', [EstablishmentController::class, 'staffIndex'])->name('establishments.index');

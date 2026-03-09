@@ -1664,4 +1664,67 @@ class InspectionResultController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Check for duplicate inspection for the same establishment, quarter, and year.
+     */
+    public function checkDuplicate(Request $request)
+    {
+        $establishmentId = $request->get('establishment_id');
+        $quarter = $request->get('quarter');
+        $year = $request->get('year');
+        
+        \Log::info('=== Staff Duplicate Check ===');
+        \Log::info('Parameters:', [
+            'establishment_id' => $establishmentId,
+            'quarter' => $quarter,
+            'year' => $year
+        ]);
+        
+        try {
+            // Query for existing inspections for the same establishment, quarter, and year
+            $existingInspection = InspectionResult::with(['inspection', 'staff', 'establishment'])
+                ->whereHas('inspection', function ($query) use ($quarter, $year) {
+                    $query->where('quarter', 'Q' . $quarter)
+                          ->whereRaw('YEAR(inspection_timestamp) = ?', [$year]);
+                })
+                ->where('establishment_id', $establishmentId)
+                ->where('status', 'submitted')
+                ->first();
+            
+            \Log::info('Query result:', ['found' => $existingInspection ? true : false]);
+            
+            if ($existingInspection) {
+                \Log::info('Duplicate found:', [
+                    'inspection_id' => $existingInspection->inspection_id,
+                    'inspection_timestamp' => $existingInspection->inspection->inspection_timestamp,
+                    'staff_name' => $existingInspection->staff->first_name . ' ' . $existingInspection->staff->last_name,
+                    'establishment_name' => $existingInspection->establishment->name
+                ]);
+                
+                return response()->json([
+                    'hasDuplicate' => true,
+                    'duplicateInspection' => [
+                        'inspection_timestamp' => $existingInspection->inspection->inspection_timestamp->toISOString(),
+                        'inspector_name' => $existingInspection->staff->first_name . ' ' . $existingInspection->staff->last_name,
+                        'establishment_name' => $existingInspection->establishment->name,
+                        'quarter' => $existingInspection->inspection->quarter,
+                        'year' => $existingInspection->inspection->inspection_timestamp->year
+                    ]
+                ]);
+            }
+            
+            \Log::info('No duplicate found');
+            return response()->json([
+                'hasDuplicate' => false
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Duplicate check error: ' . $e->getMessage());
+            return response()->json([
+                'hasDuplicate' => false,
+                'error' => 'Failed to check for duplicates'
+            ], 500);
+        }
+    }
 }

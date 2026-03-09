@@ -5,7 +5,7 @@ import { XMarkIcon, PlusIcon, MagnifyingGlassIcon, ChevronUpDownIcon, Exclamatio
 import BusinessTypeModal from "./BusinessTypeModal";
 
 export default function EstablishmentModal({ isOpen, onClose, businessTypes = [], editingEstablishment = null }) {
-  const { auth } = usePage().props;
+  const { auth, establishments } = usePage().props;
   
   // Barangays in Opol, Misamis Oriental
   const barangays = [
@@ -46,6 +46,12 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
   const [showBusinessTypeDropdown, setShowBusinessTypeDropdown] = useState(false);
   const [barangaySearch, setBarangaySearch] = useState('');
   const [showBarangayDropdown, setShowBarangayDropdown] = useState(false);
+  const [fieldValidation, setFieldValidation] = useState({
+    contact_number: '',
+    duplicate_check: ''
+  });
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateSubmission, setDuplicateSubmission] = useState(null);
 
   // Determine route prefix based on user role
   const routePrefix = auth.user.role === 'admin' ? '/admin' : '/staff';
@@ -86,19 +92,39 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
         setBarangaySearch('');
       }
       setErrors({});
+      setFieldValidation({ contact_number: '', duplicate_check: '' });
       setShowBusinessTypeDropdown(false);
       setShowBarangayDropdown(false);
     }
   }, [isOpen, editingEstablishment, businessTypes]);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+
+    // Real-time validation for contact number
+    if (name === 'contact_number') {
+      if (value === '') {
+        setFieldValidation(prev => ({ ...prev, contact_number: '' }));
+      } else if (/^[0-9]{11}$/.test(value)) {
+        setFieldValidation(prev => ({ ...prev, contact_number: 'valid' }));
+      } else {
+        setFieldValidation(prev => ({ ...prev, contact_number: 'invalid' }));
+      }
+    }
+
+    // Real-time validation for duplicate name + business type
+    if (name === 'name' || name === 'type_of_business_id') {
+      checkDuplicateValidation(name, value);
+    }
   };
 
   const handleBusinessTypeSelect = (businessType) => {
     setForm({ ...form, type_of_business_id: businessType.id });
     setBusinessTypeSearch(businessType.name);
     setShowBusinessTypeDropdown(false);
+    // Check duplicate validation when business type is selected
+    checkDuplicateValidation('type_of_business_id', businessType.id);
   };
 
   const handleBarangaySearchChange = (e) => {
@@ -164,6 +190,45 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
     barangay.toLowerCase().includes(barangaySearch.toLowerCase())
   );
 
+  // Check for duplicate name + business type combination
+  const checkDuplicateValidation = async (fieldName, fieldValue) => {
+    const currentName = fieldName === 'name' ? fieldValue : form.name;
+    const currentBusinessTypeId = fieldName === 'type_of_business_id' ? fieldValue : form.type_of_business_id;
+
+    if (currentName && currentBusinessTypeId) {
+      const existing = establishments.find(est => 
+        est.name.toLowerCase().trim() === currentName.toLowerCase().trim() &&
+        est.type_of_business_id == currentBusinessTypeId &&
+        est.id !== editingEstablishment?.id
+      );
+
+      if (existing) {
+        setFieldValidation(prev => ({ ...prev, duplicate_check: 'invalid' }));
+        setErrors(prev => ({ ...prev, name: 'An establishment with this name and business type already exists.' }));
+      } else {
+        setFieldValidation(prev => ({ ...prev, duplicate_check: 'valid' }));
+        // Clear the duplicate error if it exists
+        if (errors.name === 'An establishment with this name and business type already exists.') {
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.name;
+            return newErrors;
+          });
+        }
+      }
+    } else {
+      setFieldValidation(prev => ({ ...prev, duplicate_check: '' }));
+      // Clear the duplicate error if it exists
+      if (errors.name === 'An establishment with this name and business type already exists.') {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.name;
+          return newErrors;
+        });
+      }
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -174,6 +239,34 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
     console.log('Form data being submitted:', form);
     console.log('Editing establishment ID:', editingEstablishment?.id);
     console.log('Route prefix:', routePrefix);
+
+    // Check for duplicate before submission
+    console.log('Checking for duplicates...');
+    console.log('Form name:', form.name);
+    console.log('Form business type ID:', form.type_of_business_id);
+    console.log('Editing establishment ID:', editingEstablishment?.id);
+    console.log('Available establishments:', establishments);
+    
+    if (form.name && form.type_of_business_id) {
+      const existing = establishments.find(est => 
+        est.name.toLowerCase().trim() === form.name.toLowerCase().trim() &&
+        est.type_of_business_id == form.type_of_business_id &&
+        est.id !== editingEstablishment?.id
+      );
+      
+      console.log('Found duplicate:', existing);
+      
+      if (existing) {
+        // Show duplicate modal instead of submitting
+        setDuplicateSubmission(existing);
+        setShowDuplicateModal(true);
+        return;
+      } else {
+        console.log('No duplicate found, proceeding with submission...');
+      }
+    } else {
+      console.log('Missing name or business type, skipping duplicate check...');
+    }
 
     // Validate required fields (removed to allow empty fields)
     // const requiredFields = ['name', 'proponent', 'address', 'type_of_business_id'];
@@ -262,6 +355,7 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
     if (!isOpen) {
       setForm(initialForm);
       setErrors({});
+      setFieldValidation({ contact_number: '', duplicate_check: '' });
       setBusinessTypeSearch('');
       setBarangaySearch('');
       setShowBusinessTypeDropdown(false);
@@ -431,7 +525,12 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
                     value={form[field.name]}
                     onChange={handleChange}
                     className={`border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors[field.name] ? 'border-red-500' : 'border-gray-300'
+                      errors[field.name] ? 'border-red-500' : 
+                      field.name === 'contact_number' && fieldValidation.contact_number === 'valid' ? 'border-green-500 bg-green-50' :
+                      field.name === 'contact_number' && fieldValidation.contact_number === 'invalid' ? 'border-red-500 bg-red-50' :
+                      field.name === 'name' && fieldValidation.duplicate_check === 'valid' ? 'border-green-500 bg-green-50' :
+                      field.name === 'name' && fieldValidation.duplicate_check === 'invalid' ? 'border-red-500 bg-red-50' :
+                      'border-gray-300'
                     }`}
                   />
                 )}
@@ -439,6 +538,29 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
                   <div className="flex items-start space-x-1 mt-1">
                     <ExclamationTriangleIcon className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                     <span className="text-red-500 text-xs font-medium">{errors[field.name]}</span>
+                  </div>
+                )}
+                {/* Real-time validation feedback */}
+                {!errors[field.name] && field.name === 'contact_number' && fieldValidation.contact_number === 'valid' && (
+                  <div className="flex items-center space-x-1 mt-1">
+                    <span className="text-green-500 text-xs font-medium">✓ Valid 11-digit number</span>
+                  </div>
+                )}
+                {!errors[field.name] && field.name === 'contact_number' && fieldValidation.contact_number === 'invalid' && (
+                  <div className="flex items-center space-x-1 mt-1">
+                    <span className="text-red-500 text-xs font-medium">Must be exactly 11 digits</span>
+                  </div>
+                )}
+                {!errors[field.name] && field.name === 'name' && fieldValidation.duplicate_check === 'valid' && (
+                  <div className="flex items-center space-x-1 mt-1">
+                    <span className="text-green-500 text-xs font-medium">✓ Available</span>
+                  </div>
+                )}
+                {/* Duplicate message - shows even when there's an error */}
+                {field.name === 'name' && fieldValidation.duplicate_check === 'invalid' && (
+                  <div className="flex items-center space-x-1 mt-1">
+                    <ExclamationTriangleIcon className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-red-500 text-xs font-medium">Duplicate establishment with same name and business type</span>
                   </div>
                 )}
               </div>
@@ -490,6 +612,76 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
         onClose={() => setBusinessTypeModalOpen(false)}
         onSuccess={handleBusinessTypeSuccess}
       />
+      
+      {/* Duplicate Warning Modal */}
+      {showDuplicateModal && duplicateSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-yellow-100 rounded-full">
+                  <ExclamationTriangleIcon className="w-6 h-6 text-yellow-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Duplicate Entry Detected</h3>
+              </div>
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-4">
+              <div className="mb-4">
+                <p className="text-gray-600 text-sm mb-3">
+                  An establishment with this name and business type already exists:
+                </p>
+                
+                {/* Existing Establishment Details */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Establishment Name:</span>
+                      <p className="text-sm font-medium text-gray-900">{duplicateSubmission.name}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Business Type:</span>
+                      <p className="text-sm font-medium text-gray-900">{duplicateSubmission.business_type?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Proponent:</span>
+                      <p className="text-sm text-gray-700">{duplicateSubmission.proponent || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Address:</span>
+                      <p className="text-sm text-gray-700">{duplicateSubmission.address || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Solution:</strong> Please either change the establishment name or select a different business type to avoid duplication.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end p-4 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                I Understand
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
