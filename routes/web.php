@@ -56,6 +56,7 @@ Route::get('/StaffDashboard', function () {
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/compliance-filter', [DashboardController::class, 'getComplianceFilterData'])->name('dashboard.compliance-filter');
 
     // Profile routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

@@ -136,6 +136,68 @@ class DashboardController extends Controller
     }
     
     /**
+     * Get compliance data filtered by date range.
+     */
+    public function getComplianceFilterData(Request $request)
+    {
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        
+        // Start with base query for inspection results
+        $query = InspectionResult::with(['establishment']);
+        
+        // Apply date range filter if provided
+        if ($startDate && $endDate) {
+            $query->whereBetween('created_at', [$startDate, $endDate . ' 23:59:59']);
+        }
+        
+        // Get all inspection results within the date range
+        $inspectionResults = $query->get();
+        
+        // Get unique establishments and their latest compliance status
+        $establishmentCompliance = [];
+        foreach ($inspectionResults as $result) {
+            $establishmentId = $result->establishment_id;
+            
+            // If this establishment hasn't been processed or this result is more recent
+            if (!isset($establishmentCompliance[$establishmentId]) || 
+                $result->created_at > $establishmentCompliance[$establishmentId]['created_at']) {
+                $establishmentCompliance[$establishmentId] = [
+                    'establishment_id' => $establishmentId,
+                    'compliance_status' => $result->compliance_status,
+                    'created_at' => $result->created_at,
+                    'establishment_name' => $result->establishment->name ?? 'Unknown'
+                ];
+            }
+        }
+        
+        // Count compliant and non-compliant establishments
+        $compliantCount = 0;
+        $nonCompliantCount = 0;
+        
+        foreach ($establishmentCompliance as $establishment) {
+            if ($establishment['compliance_status'] === 'compliant') {
+                $compliantCount++;
+            } elseif ($establishment['compliance_status'] === 'not_compliant') {
+                $nonCompliantCount++;
+            }
+        }
+        
+        $totalCount = $compliantCount + $nonCompliantCount;
+        
+        return response()->json([
+            'compliant' => $compliantCount,
+            'nonCompliant' => $nonCompliantCount,
+            'total' => $totalCount,
+            'filtered' => true,
+            'dateRange' => [
+                'start' => $startDate,
+                'end' => $endDate
+            ]
+        ]);
+    }
+
+    /**
      * Get upcoming inspections.
      */
     private function getUpcomingInspections()
