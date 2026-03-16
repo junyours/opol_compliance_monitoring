@@ -126,7 +126,7 @@ export default function AdminInspectionForm({ auth }) {
         
         const term = searchTerm.toLowerCase();
         return establishments.filter(establishment => 
-            establishment.name.toLowerCase().includes(term) ||
+            establishment.name?.toLowerCase().includes(term) ||
             establishment.address?.toLowerCase().includes(term) ||
             establishment.type_of_business?.toLowerCase().includes(term) ||
             establishment.Barangay?.toLowerCase().includes(term)
@@ -242,16 +242,16 @@ export default function AdminInspectionForm({ auth }) {
         const responseType = selectedOption?.type || 'neutral';
         
         if (responseType === 'negative') {
-            if (question.question.toLowerCase().includes('permit') || question.question.toLowerCase().includes('license')) {
+            if (question.question?.toLowerCase().includes('permit') || question.question?.toLowerCase().includes('license')) {
                 recommendations.push({
                     type: 'permit',
-                    message: `Acquire necessary ${question.question.toLowerCase().includes('permit') ? 'permit' : 'license'} to comply with regulations.`,
+                    message: `Acquire necessary ${question.question?.toLowerCase().includes('permit') ? 'permit' : 'license'} to comply with regulations.`,
                     action: 'comply_lacking_permits'
                 });
-            } else if (question.question.toLowerCase().includes('facility') || question.question.toLowerCase().includes('equipment')) {
+            } else if (question.question?.toLowerCase().includes('facility') || question.question?.toLowerCase().includes('equipment')) {
                 recommendations.push({
                     type: 'facility',
-                    message: `Provide required ${question.question.toLowerCase().includes('facility') ? 'facility' : 'equipment'} to meet compliance standards.`,
+                    message: `Provide required ${question.question?.toLowerCase().includes('facility') ? 'facility' : 'equipment'} to meet compliance standards.`,
                     action: 'provide_lacking_facilities'
                 });
             } else {
@@ -303,7 +303,7 @@ export default function AdminInspectionForm({ auth }) {
             });
             
             const selectedOption = normalizedOptions.find(option => 
-                option.text && option.text.trim().toLowerCase() === response.response.trim().toLowerCase()
+                option.text && option.text.trim().toLowerCase() === response.response?.trim().toLowerCase()
             );
             return selectedOption?.type === 'negative';
         });
@@ -327,7 +327,7 @@ export default function AdminInspectionForm({ auth }) {
             });
             
             const selectedOption = normalizedOptions.find(option => 
-                option.text && option.text.trim().toLowerCase() === response.response.trim().toLowerCase()
+                option.text && option.text.trim().toLowerCase() === response.response?.trim().toLowerCase()
             );
             return selectedOption?.type === 'positive';
         });
@@ -632,7 +632,7 @@ export default function AdminInspectionForm({ auth }) {
                                         type="text"
                                         value={value}
                                         onChange={(e) => handleConditionalFieldChange(question.id, field.name, e.target.value)}
-                                        placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                                        placeholder={field.placeholder || `Enter ${field.label?.toLowerCase() || 'value'}`}
                                         className="w-full border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     />
                                 )}
