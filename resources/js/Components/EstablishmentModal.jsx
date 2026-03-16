@@ -197,7 +197,7 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
 
     if (currentName && currentBusinessTypeId) {
       const existing = establishments.find(est => 
-        est.name.toLowerCase().trim() === currentName.toLowerCase().trim() &&
+        est.name?.toLowerCase().trim() === currentName.toLowerCase().trim() &&
         est.type_of_business_id == currentBusinessTypeId &&
         est.id !== editingEstablishment?.id
       );
@@ -249,7 +249,7 @@ export default function EstablishmentModal({ isOpen, onClose, businessTypes = []
     
     if (form.name && form.type_of_business_id) {
       const existing = establishments.find(est => 
-        est.name.toLowerCase().trim() === form.name.toLowerCase().trim() &&
+        est.name?.toLowerCase().trim() === form.name.toLowerCase().trim() &&
         est.type_of_business_id == form.type_of_business_id &&
         est.id !== editingEstablishment?.id
       );
