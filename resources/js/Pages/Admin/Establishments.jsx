@@ -306,7 +306,7 @@ export default function Index({ auth, businessTypes = [] }) {
   };
 
   const filteredEstablishments = establishments.filter(est => 
-    est.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    est.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     est.proponent?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     est.business_type?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     est.Barangay?.toLowerCase().includes(searchTerm.toLowerCase()) ||
